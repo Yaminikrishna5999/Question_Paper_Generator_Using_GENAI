@@ -821,7 +821,7 @@ def _config():
     
     s1c1, s1c2 = st.columns(2)
     # Auto-sync sections with question types (1:1 mapping)
-    cfg["num_sections"] = len(cfg.get("question_types", [])) if cfg.get("question_types") else 1
+    cfg["num_sections"] = len(cfg.get("question_types", []))
     s1c1.info(f"Number of Sections: {cfg['num_sections']} (Auto-synced with Types)")
     
     st.markdown('<div class="cfg-sub-label">Automatically Generated Sections</div>', unsafe_allow_html=True)
