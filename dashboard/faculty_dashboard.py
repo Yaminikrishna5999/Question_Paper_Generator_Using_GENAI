@@ -822,16 +822,16 @@ def _config():
     s1c1, s1c2 = st.columns(2)
     cfg["num_sections"] = s1c1.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
     
-    st.markdown('<div class="cfg-sub-label">14. Automatically Generated Sections</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cfg-sub-label">Automatically Generated Sections</div>', unsafe_allow_html=True)
     sec_names = [f"Section {chr(65+i)}" for i in range(cfg["num_sections"])]
     st.write(" , ".join([f"**{n}**" for n in sec_names]))
     
-    cfg["instructions"] = st.text_area("15. Instructions for Students", cfg["instructions"], height=100)
+    cfg["instructions"] = st.text_area("Instructions for Students", cfg["instructions"], height=100)
     _sec_end()
 
     # ── SECTION 3: Question Configuration ──
     _sec("Question Configuration", "🧪")
-    st.markdown('<div class="cfg-sub-label">16. Question Types</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cfg-sub-label">Question Types</div>', unsafe_allow_html=True)
     cfg["question_types"] = st.multiselect("Select options", 
         ["MCQ", "Fill in the Blanks", "Very Short Answer", "Short Answer", "Long Answer", "Descriptive Questions"],
         default=cfg["question_types"], key="cfg_qtypes")
@@ -841,12 +841,12 @@ def _config():
         # Initialize counts if missing
         if "counts_per_type" not in cfg: cfg["counts_per_type"] = {}
         
-        st.markdown('<div class="cfg-sub-label">17. Number of Questions per Type</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Number of Questions per Type</div>', unsafe_allow_html=True)
         q_cols = st.columns(len(cfg["question_types"]))
         for i, qt in enumerate(cfg["question_types"]):
             cfg["counts_per_type"][qt] = q_cols[i].number_input(f"Count: {qt}", 1, 50, cfg["counts_per_type"].get(qt, 5), key=f"cfg_cnt_{qt}")
             
-        st.markdown('<div class="cfg-sub-label">18. Marks Allocation per Type</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Marks Allocation per Type</div>', unsafe_allow_html=True)
         m_cols = st.columns(len(cfg["question_types"]))
         for i, qt in enumerate(cfg["question_types"]):
             cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks: {qt}", 1, 20, cfg["marks_per_type"].get(qt, 2), key=f"cfg_mks_{qt}")
@@ -856,12 +856,12 @@ def _config():
     st.divider()
     d1, d2 = st.columns(2)
     with d1:
-        st.markdown('<div class="cfg-sub-label">18. Difficulty Level Distribution</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Difficulty Level Distribution</div>', unsafe_allow_html=True)
         diff_list = ["Mixed Difficulty", "Easy", "Medium", "Hard"]
         diff_val = cfg.get("difficulty", "Mixed Difficulty")
         cfg["difficulty"] = st.selectbox("Distribution Mode", diff_list, index=diff_list.index(diff_val) if diff_val in diff_list else 0)
     with d2:
-        st.markdown('<div class="cfg-sub-label">19. Bloom\'s Taxonomy Level</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Bloom\'s Taxonomy Level</div>', unsafe_allow_html=True)
         cfg["bloom"] = st.multiselect("Cognitive Levels", 
             ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"],
             default=cfg["bloom"])
@@ -870,14 +870,14 @@ def _config():
     # ── SECTION 4 & 5: Content Source & Selection ──
     _sec("Content Source & Units", "📚")
     
-    source_r = st.radio("Choose Generation Mode", ["Manual Topic Entry", "File Upload"], horizontal=True)
+    source_r = st.radio("Choose Generation Mode", ["Select Mode", "Manual Topic Entry", "File Upload"], horizontal=True)
     cfg["source_mode"] = source_r # Sync to state
     
     is_file = (source_r == "File Upload")
     
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        st.markdown('<div class="cfg-sub-label">20. Manual Topics / Syllabus (comma separated)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Manual Topics / Syllabus (comma separated)</div>', unsafe_allow_html=True)
         # 🚨 MANUAL TOPIC ENTRY 🚨
         topics_str = ", ".join(cfg["topics"]) if isinstance(cfg["topics"], list) else cfg["topics"]
         new_topics = st.text_area("Enter topics to cover", 
@@ -890,7 +890,7 @@ def _config():
             st.warning("Manual topics disabled (File Upload active). Questions will be generated based only on the uploaded file.")
     
     with col_s2:
-        st.markdown('<div class="cfg-sub-label">21. Upload Reference File</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cfg-sub-label">Upload Reference File</div>', unsafe_allow_html=True)
         up_file = st.file_uploader("Support: PDF, DOCX, TXT", type=["pdf", "docx", "txt"])
         if up_file:
             # 🚨 ROBUST FILE EXTRACTION 🚨
@@ -912,12 +912,12 @@ def _config():
     # ── SECTION 5: Advanced AI & Multiple Sets ──
     _sec("Advanced AI & Multi-Set", "🤖")
     a1, a2, a3 = st.columns(3)
-    cfg["randomize"] = a1.toggle("22. Question Randomization", value=cfg["randomize"], key="cfg_randomize")
-    cfg["avoid_duplicates"] = a2.toggle("23. Avoid Duplicate Questions", value=cfg["avoid_duplicates"], key="cfg_duplicates")
-    cfg["include_prev"] = a3.toggle("24. Include Previous Year Questions", value=cfg["include_prev"], key="cfg_prev_yr")
+    cfg["randomize"] = a1.toggle("Question Randomization", value=cfg["randomize"], key="cfg_randomize")
+    cfg["avoid_duplicates"] = a2.toggle("Avoid Duplicate Questions", value=cfg["avoid_duplicates"], key="cfg_duplicates")
+    cfg["include_prev"] = a3.toggle("Include Previous Year Questions", value=cfg["include_prev"], key="cfg_prev_yr")
     
     st.divider()
-    st.markdown('<div class="cfg-sub-label">25. Number of Question Paper Sets</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cfg-sub-label">Number of Question Paper Sets</div>', unsafe_allow_html=True)
     # 🚨 LIMIT: MAX 5 SETS 🚨
     cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 1, 5, min(cfg["num_sets"], 5), key="cfg_num_sets", help="Max 5 sets possible for unique generation.")
     if cfg["num_sets"] > 1:
@@ -937,6 +937,31 @@ def _run_generation(cfg):
     api_key = _get_key()
     if not api_key:
         st.error("API Key missing! Please check your settings.")
+        return
+
+    # 🚨 STRICT VALIDATION 🚨
+    qtypes = cfg.get("question_types", [])
+    num_sections = cfg.get("num_sections", 0)
+    source_mode = cfg.get("source_mode")
+
+    if not qtypes:
+        st.error("Please select at least one Question Type.")
+        return
+    
+    if num_sections != len(qtypes):
+        st.error(f"Mismatch: Number of Sections ({num_sections}) must match Number of Question Types ({len(qtypes)}). Please adjust your configuration.")
+        return
+
+    if source_mode == "Select Mode":
+        st.error("Please choose a Generation Mode (Manual or File Upload).")
+        return
+    
+    if source_mode == "Manual Topic Entry" and not cfg.get("topics"):
+        st.error("Manual mode active but no topics provided. Please enter topics.")
+        return
+    
+    if source_mode == "File Upload" and not cfg.get("file_content"):
+        st.error("File upload mode active but no file content detected. Please upload a file.")
         return
 
     from modules.question_generator import QuestionGenerator
