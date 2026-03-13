@@ -163,12 +163,14 @@ The distribution must be precisely: {type_reqs}.
 
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
-2. ZERO OUTSIDE KNOWLEDGE: All questions and answers MUST be derived EXCLUSIVELY from the provided <SOURCE_TEXT>. If information is missing, do not hallucinate; generate based only on what is present.
-3. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
-4. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
-5. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
-6. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
-7. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
+2. ZERO OUTSIDE KNOWLEDGE: All questions and answers MUST be derived EXCLUSIVELY from the provided <SOURCE_TEXT>.
+3. CONCISE QUESTIONS: Question length MUST be independent of marks. A 10-mark question should be a clear, direct instruction or problem statement, NOT a long paragraph. Avoid verbosity.
+4. STUDENT CLARITY: Use simple, direct language. The goal of the question must be immediately obvious.
+5. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
+6. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
+7. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+8. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
+9. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
 
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
@@ -206,11 +208,13 @@ EXAM: {exam_name} | {course} | {semester} | Set {set_label}
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
 2. ZERO OUTSIDE KNOWLEDGE: Base questions ONLY on the provided Topics/Context. Do not use general knowledge outside these subjects.
-3. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
-4. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
-5. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
-6. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
-7. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
+3. CONCISE QUESTIONS: Regardless of marks, keep the question text brief and focused. Do not increase question length just because marks are higher (e.g., a 10-mark question should still be concise).
+4. STUDENT CLARITY: Phrase questions simply and directly so they are easy for students to understand.
+5. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
+6. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
+7. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+8. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
+9. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
 
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
