@@ -127,9 +127,11 @@ class QuestionGenerator:
         """Standardized university exam paper prompt with high-quality generation focus."""
         qtypes   = cfg.get("question_types",["MCQ","Short Answer"])
         q_cnt    = cfg.get("total_questions",10)
-        easy_n   = max(1, round(q_cnt * cfg.get("easy_pct",30)/100))
-        med_n    = max(1, round(q_cnt * cfg.get("med_pct",50)/100))
-        hard_n   = max(0, q_cnt - easy_n - med_n)
+        
+        # Build specific type requirements string
+        counts = cfg.get("counts_per_type", {})
+        type_reqs = ", ".join([f"{counts.get(qt, 1)} {qt}" for qt in qtypes])
+        
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))
         sections = ", ".join([f"Section {chr(65+i)}" for i in range(cfg.get("num_sections",3))])
         
@@ -143,7 +145,8 @@ class QuestionGenerator:
         if is_file_mode:
             # Construct prompt for File Mode
             return f"""You are a professional university professor.
-Generate {q_cnt} unique questions based EXCLUSIVELY on the provided source text.
+Generate EXACTLY {q_cnt} unique questions based EXCLUSIVELY on the provided source text.
+The distribution must be precisely: {type_reqs}.
 
 <SOURCE_TEXT>
 {cfg['file_content'][:50000]}
@@ -160,8 +163,7 @@ STRICT REQUIREMENTS:
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
 - SECTIONS: {sections}
-- TYPES: {', '.join(qtypes)}
-- DIFFICULTY: Easy={easy_n}, Medium={med_n}, Hard={hard_n}
+- DISTRIBUTION: {type_reqs} (Total: {q_cnt} questions)
 - BLOOM LEVELS: {bloom}
 - MARKS: {marks_ln}
 
@@ -183,7 +185,8 @@ Start generating now starting from 1:"""
             topics = f"Topics: {', '.join(raw_topics) if isinstance(raw_topics, list) else raw_topics}"
             
             return f"""You are a professional academic expert. 
-Generate {q_cnt} unique university-level questions based on the following metadata.
+Generate EXACTLY {q_cnt} unique university-level questions based on the following metadata.
+The distribution must be precisely: {type_reqs}.
 
 EXAM: {exam_name} | {course} | {semester} | Set {set_label}
 {units} | {topics} | Sections: {sections}
