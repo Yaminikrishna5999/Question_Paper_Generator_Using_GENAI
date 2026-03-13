@@ -135,6 +135,8 @@ class QuestionGenerator:
             rem = q_cnt % len(qtypes)
             counts = {qt: per_type + (1 if i < rem else 0) for i, qt in enumerate(qtypes)}
             
+        # Ensure q_cnt matches the sum of individual counts for prompt consistency
+        q_cnt = sum(counts.values())
         type_reqs = ", ".join([f"{counts.get(qt, 1)} {qt}" for qt in qtypes])
         
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))

@@ -434,6 +434,7 @@ def show_v5_faculty_dashboard():
             # Section 3: Question Config
             "question_types": ["MCQ", "Short Answer"],
             "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
+            "counts_per_type": {"MCQ": 5, "Short Answer": 5},
             "difficulty": "Medium",
             "bloom": ["Remember", "Understand"],
             
@@ -762,6 +763,7 @@ def _config():
                 "instructions": "1. Answer all questions.\n2. Figures to the right indicate full marks.",
                 "question_types": ["MCQ", "Short Answer"],
                 "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
+                "counts_per_type": {"MCQ": 5, "Short Answer": 5},
                 "difficulty": "Medium",
                 "bloom": ["Remember", "Understand"],
                 "source_mode": "Manual Topic Entry",
@@ -834,13 +836,21 @@ def _config():
         default=cfg["question_types"])
     
     st.divider()
-    st.markdown('<div class="cfg-sub-label">17. Marks Allocation</div>', unsafe_allow_html=True)
     if cfg["question_types"]:
+        # Initialize counts if missing
+        if "counts_per_type" not in cfg: cfg["counts_per_type"] = {}
+        
+        st.markdown('<div class="cfg-sub-label">17. Number of Questions per Type</div>', unsafe_allow_html=True)
+        q_cols = st.columns(len(cfg["question_types"]))
+        for i, qt in enumerate(cfg["question_types"]):
+            cfg["counts_per_type"][qt] = q_cols[i].number_input(f"Count: {qt}", 1, 50, cfg["counts_per_type"].get(qt, 5), key=f"cfg_cnt_{qt}")
+            
+        st.markdown('<div class="cfg-sub-label">18. Marks Allocation per Type</div>', unsafe_allow_html=True)
         m_cols = st.columns(len(cfg["question_types"]))
         for i, qt in enumerate(cfg["question_types"]):
-            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks per {qt}", 1, 20, cfg["marks_per_type"].get(qt, 2), key=f"cfg_marks_{qt}")
+            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks: {qt}", 1, 20, cfg["marks_per_type"].get(qt, 2), key=f"cfg_mks_{qt}")
     else:
-        st.caption("Select question types above to allocate marks.")
+        st.caption("Select question types above to allocate counts and marks.")
 
     st.divider()
     d1, d2 = st.columns(2)
