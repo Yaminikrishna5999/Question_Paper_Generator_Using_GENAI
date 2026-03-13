@@ -73,7 +73,7 @@ class QuestionGenerator:
         MAX_RETRIES = 2
         MAX_DUPLICATE_RETRIES = 2
         
-        prompt = self._build_prompt(topic, difficulty, question_type, pdf_context=pdf_context)
+        prompt = self._build_prompt(topic, difficulty, question_type, marks=marks, pdf_context=pdf_context)
         model = self._get_working_model()
         
         try:
@@ -133,7 +133,7 @@ class QuestionGenerator:
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))
         sections = ", ".join([f"Section {chr(65+i)}" for i in range(cfg.get("num_sections",3))])
         
-        marks_ln = "\n".join([f"  - {qt}: {cfg.get('marks_per_type', {}).get(qt, 5)} marks" for qt in qtypes])
+        marks_ln = "\n".join([f"  - {qt}: {cfg.get('marks_per_type', {}).get(qt, 5)} marks. Requirements: {'Provide a comprehensive, multi-paragraph essay-style answer with introduction and body' if cfg.get('marks_per_type', {}).get(qt, 5) >= 10 else 'Provide a detailed technical explanation with bullet points' if cfg.get('marks_per_type', {}).get(qt, 5) >= 5 else 'Provide a concise 2-3 sentence technical answer'}." for qt in qtypes])
         prev_note = f"\n\nAVOID THESE EXISTING QUESTIONS:\n{prev_qs}" if prev_qs else ""
         
         is_file_mode = cfg.get("source_mode") == "File Upload" and bool(cfg.get("file_content"))
@@ -349,7 +349,7 @@ Start generating now starting from 1:"""
             
         return qs
 
-    def _build_prompt(self, topic, difficulty, question_type, pdf_context=None):
+    def _build_prompt(self, topic, difficulty, question_type, marks=None, pdf_context=None):
         """Build AI prompt based on parameters, optionally using PDF syllabus content"""
         
         # If PDF content is provided, prepend it as rich context
@@ -364,6 +364,17 @@ Use this content as your primary source of knowledge to generate the question:
 Now, based strictly on the above content, """
         else:
             context_block = ""
+
+        # Depth instructions based on marks
+        mks = marks or 5
+        depth_instr = ""
+        if question_type == 'Short Answer':
+            if mks <= 2: depth_instr = "concise 2-sentence answer"
+            elif mks <= 5: depth_instr = "detailed 4-6 sentence technical explanation"
+            else: depth_instr = "very detailed multi-paragraph explanation"
+        elif question_type == 'Long Answer':
+            if mks <= 5: depth_instr = "comprehensive technical explanation with bullet points"
+            else: depth_instr = "extensive university-level essay-style answer with structural headers"
         prompts = {
             'MCQ': f"""{context_block}generate a {difficulty} level multiple-choice question about: {topic}
 
@@ -382,29 +393,29 @@ C) [option]
 D) [option]
 ANSWER: [letter]""",
 
-            'Short Answer': f"""{context_block}generate a {difficulty} level short answer question about: {topic}
+            'Short Answer': f"""{context_block}generate a {difficulty} level short answer question ({mks} marks) about: {topic}
 
 Requirements:
-- Requires 2-4 sentence answer
+- Requires {depth_instr}
 - Tests conceptual understanding
 - Clear and specific
 - Academic language
 
 Format your response EXACTLY as:
 QUESTION: [question text]
-ANSWER: [brief model answer in 2-4 sentences]""",
+ANSWER: [model answer]""",
 
-            'Long Answer': f"""{context_block}generate a {difficulty} level long answer/essay question about: {topic}
+            'Long Answer': f"""{context_block}generate a {difficulty} level long answer/essay question ({mks} marks) about: {topic}
 
 Requirements:
-- Requires detailed explanation (1-2 paragraphs)
+- Requires {depth_instr}
 - Tests deep understanding and analysis
 - Open-ended but focused
 - Academic language
 
 Format your response EXACTLY as:
 QUESTION: [question text]
-ANSWER: [key points to cover as bullet points]""",
+ANSWER: [detailed answer]""",
 
             'True/False': f"""{context_block}generate a {difficulty} level True/False question about: {topic}
 

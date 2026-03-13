@@ -134,7 +134,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-def add_user(full_name, email, department, designation, password, role="faculty"):
+def add_user(full_name, email, department, designation, password, role="faculty", subjects=""):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     hashed_pass = hashlib.sha256(password.encode()).hexdigest()
