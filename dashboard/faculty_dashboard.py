@@ -816,10 +816,12 @@ def _config():
 
     # ── SECTION 2: Question Paper Structure ──
     _sec("Question Paper Structure", "📐")
+    # Section count is now tied to question types for strict organization
+    cfg["num_sections"] = len(cfg.get("question_types", ["MCQ", "Short Answer"]))
+    
     s1c1, s1c2 = st.columns(2)
     cfg["total_questions"] = s1c1.slider("Total Number of Questions", 1, 50, cfg["total_questions"], key="cfg_total_qs")
-    # 🚨 LIMIT: MAX 5 SECTIONS 🚨
-    cfg["num_sections"] = s1c2.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
+    s1c2.metric("Total Sections", cfg["num_sections"], help="Each question type is assigned to its own section (Type 1 -> Section A, Type 2 -> Section B...).")
     
     st.markdown('<div class="cfg-sub-label">14. Automatically Generated Sections</div>', unsafe_allow_html=True)
     sec_names = [f"Section {chr(65+i)}" for i in range(cfg["num_sections"])]

@@ -163,11 +163,12 @@ The distribution must be precisely: {type_reqs}.
 
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
-2. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
-3. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
-4. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer as it breaks the parser.
-5. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
-6. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
+2. ZERO OUTSIDE KNOWLEDGE: All questions and answers MUST be derived EXCLUSIVELY from the provided <SOURCE_TEXT>. If information is missing, do not hallucinate; generate based only on what is present.
+3. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
+4. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
+5. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+6. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
+7. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
 
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
@@ -204,11 +205,12 @@ EXAM: {exam_name} | {course} | {semester} | Set {set_label}
 
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
-2. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
-3. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
-4. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
-5. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
-6. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
+2. ZERO OUTSIDE KNOWLEDGE: Base questions ONLY on the provided Topics/Context. Do not use general knowledge outside these subjects.
+3. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
+4. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
+5. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+6. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
+7. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
 
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
@@ -272,8 +274,10 @@ Start generating now starting from 1:"""
         blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*\[)', raw)
         qs = []
         qtypes = cfg.get("question_types", ["MCQ", "Short Answer"])
+        # Map each type to a specific section sequentially
+        type_to_sec = {qt: f"Section {chr(65+i)}" for i, qt in enumerate(qtypes)}
+        
         topics = cfg.get("topics") or ["General"]
-        n_secs = max(1, cfg.get("num_sections", 3))
         
         for i, blk in enumerate(blocks):
             if not blk.strip(): continue
@@ -356,7 +360,7 @@ Start generating now starting from 1:"""
                 "a": ans,
                 "type": qtype, "difficulty": diff, "bloom": bloom, "marks": marks_val,
                 "topic": safe_topic,
-                "section": f"Section {chr(65 + (i % n_secs))}"
+                "section": type_to_sec.get(qtype, "Section A")
             })
             
         return qs
