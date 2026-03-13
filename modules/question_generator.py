@@ -244,21 +244,22 @@ Start generating now starting from 1:"""
                     return self.generate_batch(prompt, _retry_count + 1)
             self.errors.append(f"Generation error ({model}): {str(e)}")
             return None
-
     @staticmethod
     def clean_metadata(line_text):
-        """Removes leading Q#. and bracketed [METADATA] patterns."""
-        # 1. Remove leading Q#. or #. (e.g., "Q1. ", "1. ", "1) ")
+        """Removes leading Q#. and all bracketed [METADATA] patterns from the beginning of a line."""
+        # 1. Remove leading numbering (e.g., "1. ", "Q1. ", "1) ")
         cleaned = re.sub(r'^(Q?\d+[\.\:\)]\s*)', '', line_text, flags=re.I).strip()
         
-        # 2. Precise Bracket Removal (Removes [MCQ], [EASY], [Short Answer] etc.)
-        # Allows for spaces inside brackets to catch multi-word types.
-        tag_pattern = r'\[\s*(EASY|MEDIUM|HARD|MCQ|SHORT|LONG|FILL|TRUE|FALSE|DESCRIPTIVE|REMEMBER|UNDERSTAND|APPLY|ANALYZE|EVALUATE|CREATE|[\d\.\s]*MARKS?|SHORT\s+ANSWER|LONG\s+ANSWER|FILL\s+IN\s+THE\s+BLANKS)\s*\]'
-        cleaned = re.sub(tag_pattern, '', cleaned, flags=re.I).strip()
+        # 2. Generic Bracket Removal: Remove any [...] at the start of the text
+        # This handles [EASY], [MCQ], [Very Short Answer] etc. without needing a keyword list.
+        while cleaned.startswith('['):
+            # Find the closing bracket that matches the first opening bracket
+            match = re.search(r'^\[.*?\]', cleaned)
+            if match:
+                cleaned = cleaned[match.end():].strip()
+            else:
+                break
         
-        # 3. Handle cases where multiple brackets are stacked [EASY][MCQ]
-        cleaned = re.sub(tag_pattern, '', cleaned, flags=re.I).strip()
-                
         return cleaned
 
     def parse_academic_batch(self, raw, cfg):
@@ -367,6 +368,14 @@ Start generating now starting from 1:"""
                 "section": type_to_sec.get(qtype, "Section A")
             })
             
+        # Final Step: Sort questions by section to ensure perfect grouping (e.g., Section A, then B...)
+        qs.sort(key=lambda x: x.get("section", "Section A"))
+        
+        # Re-index numbers after sorting for clean sequential listing
+        for idx, q in enumerate(qs):
+            q["no"] = idx + 1
+            q["number"] = idx + 1
+
         return qs
 
     def _build_prompt(self, topic, difficulty, question_type, pdf_context=None):
