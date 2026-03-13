@@ -820,7 +820,9 @@ def _config():
     cfg["total_questions"] = sum(cfg.get("counts_per_type", {}).values())
     
     s1c1, s1c2 = st.columns(2)
-    cfg["num_sections"] = s1c1.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
+    # Auto-sync sections with question types (1:1 mapping)
+    cfg["num_sections"] = len(cfg.get("question_types", [])) if cfg.get("question_types") else 1
+    s1c1.info(f"Number of Sections: {cfg['num_sections']} (Auto-synced with Types)")
     
     st.markdown('<div class="cfg-sub-label">Automatically Generated Sections</div>', unsafe_allow_html=True)
     sec_names = [f"Section {chr(65+i)}" for i in range(cfg["num_sections"])]
@@ -833,7 +835,7 @@ def _config():
     _sec("Question Configuration", "🧪")
     st.markdown('<div class="cfg-sub-label">Question Types</div>', unsafe_allow_html=True)
     cfg["question_types"] = st.multiselect("Select options", 
-        ["MCQ", "Fill in the Blanks", "Very Short Answer", "Short Answer", "Long Answer", "Descriptive Questions"],
+        ["MCQ", "Short Answer", "Long Answer"],
         default=cfg["question_types"], key="cfg_qtypes")
     
     st.divider()

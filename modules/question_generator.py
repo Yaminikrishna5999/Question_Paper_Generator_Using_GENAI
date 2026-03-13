@@ -164,7 +164,7 @@ The distribution must be precisely: {type_reqs}.
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
 2. ZERO OUTSIDE KNOWLEDGE: All questions and answers MUST be derived EXCLUSIVELY from the provided <SOURCE_TEXT>.
-3. CONCISE QUESTIONS: Question length MUST be independent of marks. A 10-mark question should be a clear, direct instruction or problem statement, NOT a long paragraph. Avoid verbosity.
+3. CONCISE QUESTIONS: Question length MUST be independent of marks. For 10-mark questions, the text MUST be concise (max 2-3 sentences or 3-4 lines). Do NOT generate 10 lines of text just because it is worth 10 marks.
 4. STUDENT CLARITY: Use simple, direct language. The goal of the question must be immediately obvious.
 5. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
 6. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
@@ -209,7 +209,7 @@ EXAM: {exam_name} | {course} | {semester} | Set {set_label}
 STRICT REQUIREMENTS:
 1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
 2. ZERO OUTSIDE KNOWLEDGE: Base questions ONLY on the provided Topics/Context. Do not use general knowledge outside these subjects.
-3. CONCISE QUESTIONS: Regardless of marks, keep the question text brief and focused. Do not increase question length just because marks are higher (e.g., a 10-mark question should still be concise).
+3. CONCISE QUESTIONS: Regardless of marks, keep the question text brief and focused. Even for 10-mark questions, the text MUST be concise (max 2-3 sentences or 3-4 lines). Do NOT generate 10 lines of text just because it is worth 10 marks.
 4. STUDENT CLARITY: Phrase questions simply and directly so they are easy for students to understand.
 5. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
 6. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
