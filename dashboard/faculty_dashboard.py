@@ -434,7 +434,6 @@ def show_v5_faculty_dashboard():
             # Section 3: Question Config
             "question_types": ["MCQ", "Short Answer"],
             "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
-            "counts_per_type": {"MCQ": 5, "Short Answer": 5},
             "difficulty": "Medium",
             "bloom": ["Remember", "Understand"],
             
@@ -763,7 +762,6 @@ def _config():
                 "instructions": "1. Answer all questions.\n2. Figures to the right indicate full marks.",
                 "question_types": ["MCQ", "Short Answer"],
                 "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
-                "counts_per_type": {"MCQ": 5, "Short Answer": 5},
                 "difficulty": "Medium",
                 "bloom": ["Remember", "Understand"],
                 "source_mode": "Manual Topic Entry",
@@ -816,12 +814,8 @@ def _config():
 
     # ── SECTION 2: Question Paper Structure ──
     _sec("Question Paper Structure", "📐")
-    # Total Questions is now a derived sum of per-type counts
-    total_qs_from_counts = sum(cfg.get("counts_per_type", {}).values())
-    cfg["total_questions"] = total_qs_from_counts
-    
     s1c1, s1c2 = st.columns(2)
-    s1c1.metric("Total Questions", cfg["total_questions"], delta=None, help="Sum of questions from all types below")
+    cfg["total_questions"] = s1c1.slider("Total Number of Questions", 1, 50, cfg["total_questions"], key="cfg_total_qs")
     # 🚨 LIMIT: MAX 5 SECTIONS 🚨
     cfg["num_sections"] = s1c2.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
     
@@ -840,29 +834,13 @@ def _config():
         default=cfg["question_types"])
     
     st.divider()
-    st.markdown('<div class="cfg-sub-label">17. Questions per Type & Marks Allocation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cfg-sub-label">17. Marks Allocation</div>', unsafe_allow_html=True)
     if cfg["question_types"]:
-        # Initialize counts if missing
-        if "counts_per_type" not in cfg: cfg["counts_per_type"] = {}
-        
-        for qt in cfg["question_types"]:
-            qc1, qc2, qc3 = st.columns([2, 1, 1])
-            qc1.markdown(f'<div style="padding-top:10px; font-weight:600; color:{C.t2};">{qt}</div>', unsafe_allow_html=True)
-            
-            # Count Input
-            curr_count = cfg["counts_per_type"].get(qt, 5)
-            new_count = qc2.number_input(f"Count: {qt}", 1, 50, curr_count, key=f"cnt_{qt}", label_visibility="collapsed")
-            cfg["counts_per_type"][qt] = new_count
-            
-            # Marks Input
-            curr_marks = cfg["marks_per_type"].get(qt, 2)
-            new_marks = qc3.number_input(f"Marks: {qt}", 1, 20, curr_marks, key=f"mks_{qt}", label_visibility="collapsed")
-            cfg["marks_per_type"][qt] = new_marks
-            
-            qc2.caption("Questions")
-            qc3.caption("Marks each")
+        m_cols = st.columns(len(cfg["question_types"]))
+        for i, qt in enumerate(cfg["question_types"]):
+            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks per {qt}", 1, 20, cfg["marks_per_type"].get(qt, 2), key=f"cfg_marks_{qt}")
     else:
-        st.caption("Select question types above to allocate counts and marks.")
+        st.caption("Select question types above to allocate marks.")
 
     st.divider()
     d1, d2 = st.columns(2)

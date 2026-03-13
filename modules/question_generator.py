@@ -128,8 +128,13 @@ class QuestionGenerator:
         qtypes   = cfg.get("question_types",["MCQ","Short Answer"])
         q_cnt    = cfg.get("total_questions",10)
         
-        # Build specific type requirements string
+        # Build specific type requirements string (calculate balanced if missing)
         counts = cfg.get("counts_per_type", {})
+        if not counts and qtypes:
+            per_type = q_cnt // len(qtypes)
+            rem = q_cnt % len(qtypes)
+            counts = {qt: per_type + (1 if i < rem else 0) for i, qt in enumerate(qtypes)}
+            
         type_reqs = ", ".join([f"{counts.get(qt, 1)} {qt}" for qt in qtypes])
         
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))
@@ -141,6 +146,8 @@ class QuestionGenerator:
         is_file_mode = cfg.get("source_mode") == "File Upload" and bool(cfg.get("file_content"))
         exam_name = cfg.get('exam_name','Standard Examination')
         semester  = cfg.get('semester','')
+        instructions = cfg.get('instructions', '')
+        instr_note = f"\nFOLLOW THESE INSTRUCTIONS FOR DISTRIBUTION & FORMATTING:\n{instructions}" if instructions else ""
         
         if is_file_mode:
             # Construct prompt for File Mode
@@ -163,7 +170,7 @@ STRICT REQUIREMENTS:
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
 - SECTIONS: {sections}
-- DISTRIBUTION: {type_reqs} (Total: {q_cnt} questions)
+- DISTRIBUTION: {type_reqs} (Total: {q_cnt} questions){instr_note}
 - BLOOM LEVELS: {bloom}
 - MARKS: {marks_ln}
 
@@ -189,7 +196,7 @@ Generate EXACTLY {q_cnt} unique university-level questions based on the followin
 The distribution must be precisely: {type_reqs}.
 
 EXAM: {exam_name} | {course} | {semester} | Set {set_label}
-{units} | {topics} | Sections: {sections}
+{units} | {topics} | Sections: {sections}{instr_note}
 
 {prev_note}
 
