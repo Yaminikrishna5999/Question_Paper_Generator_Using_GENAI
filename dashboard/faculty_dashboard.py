@@ -1315,6 +1315,12 @@ def _answers():
         return
     for p in st.session_state.v5_papers:
         with st.expander(f"🔑 {p['title']} — {p['name']}"):
+            st.markdown(f"""
+            <div style="background:white;border:1px solid {C.sbBd};border-radius:10px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:12px;color:{C.t3};"><b>Generated Date & Time:</b> {p.get('created_at', 'N/A')}</div>
+                <div style="font-size:10px;padding:3px 8px;background:{C.pageBg};border-radius:5px;color:{C.violet};border:1px solid {C.sbBd};">Set {p.get('set', 'A')}</div>
+            </div>
+            """, unsafe_allow_html=True)
             for q in p["questions"]:
                 st.markdown(f"""
                 <div style="background:{C.pageBg};border-radius:10px;padding:12px;
