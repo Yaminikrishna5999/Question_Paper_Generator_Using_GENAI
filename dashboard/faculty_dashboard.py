@@ -1009,7 +1009,7 @@ def _papers():
 
     st.markdown(f'<div style="font-size:16px; font-weight:700; color:{C.t1}; margin-bottom:15px;">Generated Exam Papers repository</div>', unsafe_allow_html=True)
     
-    for p in reversed(papers):
+    for p in papers:
         # Normalize for Export Handler
         p_norm = _normalize_paper(p)
         
@@ -1155,9 +1155,9 @@ def _preview():
     pid = st.session_state.get("preview_paper_id")
     if pid:
         p = next((x for x in papers_list if x["id"] == pid),
-                 papers_list[-1] if papers_list else {})
+                 papers_list[0] if papers_list else {})
     else:
-        p = papers_list[-1] if papers_list else {}
+        p = papers_list[0] if papers_list else {}
 
     cfg = p.get('cfg', {})
     raw_instr = cfg.get('instructions', '1. Answer all questions.\n2. Figures to the right indicate full marks.')
@@ -1356,9 +1356,9 @@ def _markscheme():
     pid = st.session_state.get("preview_paper_id")
     if pid:
         p = next((x for x in papers_list if x["id"] == pid),
-                 papers_list[-1] if papers_list else {})
+                 papers_list[0] if papers_list else {})
     else:
-        p = papers_list[-1] if papers_list else {}
+        p = papers_list[0] if papers_list else {}
 
     if p:
         html = f"""
