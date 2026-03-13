@@ -1,0 +1,78 @@
+================================================================================
+MID-TERM EXAMINATION
+================================================================================
+
+Subject: python
+Paper: Set A
+Duration: 30 Minutes
+Max Marks: 50
+Total Questions: 1
+Date: 22-02-2026
+
+================================================================================
+
+SECTION 1: MCQ (1 Questions - 1 Marks)
+--------------------------------------------------------------------------------
+
+Q1. [1 marks]
+
+Given the following Python code:
+```python
+class NonDataDescriptor:
+    def __get__(self, instance, owner):
+        return "NonDataDescriptor invoked"
+
+class DataDescriptor:
+    def __get__(self, instance, owner):
+        return "DataDescriptor invoked"
+    def __set__(self, instance, value):
+        # The presence of __set__ defines it as a data descriptor.
+        # Its implementation here does not store the value,
+        # but the method's existence is crucial.
+        pass 
+
+class MyClass:
+    ndd = NonDataDescriptor()
+    dd = DataDescriptor()
+
+obj = MyClass()
+
+print(obj.ndd)             # Statement 1
+obj.ndd = "instance_value_ndd"
+print(obj.ndd)             # Statement 2
+
+print(obj.dd)              # Statement 3
+obj.dd = "instance_value_dd" # This invokes DataDescriptor.__set__
+print(obj.dd)              # Statement 4
+```
+What is the expected output for `Statement 1`, `Statement 2`, `Statement 3`, and `Statement 4` in sequence?
+
+A)
+NonDataDescriptor invoked
+instance_value_ndd
+DataDescriptor invoked
+DataDescriptor invoked
+
+B)
+NonDataDescriptor invoked
+NonDataDescriptor invoked
+DataDescriptor invoked
+DataDescriptor invoked
+
+C)
+NonDataDescriptor invoked
+instance_value_ndd
+DataDescriptor invoked
+instance_value_dd
+
+D)
+NonDataDescriptor invoked
+NonDataDescriptor invoked
+DataDescriptor invoked
+instance_value_dd
+
+----------------------------------------
+
+================================================================================
+--- End of Question Paper ---
+================================================================================

@@ -1,0 +1,84 @@
+======================================================================
+  MID-TERM EXAMINATION
+======================================================================
+
+  Subject         : python
+  Paper           : Set A
+  Duration        : 30 Minutes
+  Max Marks       : 50
+  Total Questions : 1
+  Date            : 22-02-2026
+
+======================================================================
+
+  SECTION 1: MCQ
+  (1 Questions - 1 Marks)
+  --------------------------------------------------
+
+  Q1.  [1 marks]  (Hard)
+
+    Consider the following Python code defining a custom descriptor and a class using it:
+    
+    class ValueTracker:
+        def __init__(self, initial_value):
+            self._value = initial_value
+            self.name = None
+    
+        def __set_name__(self, owner, name):
+            self.name = name
+    
+        def __get__(self, instance, owner):
+            if instance is None:
+                # Access via class
+                return f"Class-level default for {self.name}: {self._value}"
+            else:
+                # Access via instance
+                if self.name in instance.__dict__:
+                    return f"Instance-specific value for {self.name}: {instance.__dict__[self.name]}"
+                else:
+                    return f"Descriptor's initial value for {self.name}: {self._value}"
+    
+        def __set__(self, instance, value):
+            # This method's presence makes ValueTracker a data descriptor
+            instance.__dict__[self.name] = value
+    
+    class MyClass:
+        data = ValueTracker("default")
+    
+    # Execution sequence
+    obj = MyClass()
+    output = []
+    output.append(MyClass.data)
+    output.append(obj.data)
+    obj.data = "custom"
+    output.append(obj.data)
+    output.append(MyClass.data)
+    
+    print("\n".join(output))
+    
+    Which of the following sequences accurately represents the printed output?
+    A)
+    Class-level default for data: default
+    Instance-specific value for data: default
+    Instance-specific value for data: custom
+    Class-level default for data: custom
+    B)
+    Class-level default for data: default
+    Descriptor's initial value for data: default
+    Instance-specific value for data: custom
+    Class-level default for data: default
+    C)
+    Class-level default for data: default
+    Descriptor's initial value for data: default
+    Descriptor's initial value for data: custom
+    Class-level default for data: default
+    D)
+    Class-level default for data: default
+    Instance-specific value for data: default
+    Instance-specific value for data: custom
+    Descriptor's initial value for data: default
+
+
+======================================================================
+  --- End of Question Paper ---
+======================================================================

@@ -1,0 +1,45 @@
+======================================================================
+  MID-TERM EXAMINATION
+======================================================================
+
+  Subject         : python
+  Paper           : Set A
+  Duration        : 30 Minutes
+  Max Marks       : 50
+  Total Questions : 1
+  Date            : 22-02-2026
+
+======================================================================
+
+  SECTION 1: MCQ
+  (1 Questions - 1 Marks)
+  --------------------------------------------------
+
+  Q1.  [1 marks]  (Hard)
+
+    Consider the following Python code snippet:
+    
+    class Parent:
+        def __init__(self, val_p):
+            self.val_p = val_p
+    
+    class Child(Parent):
+        __slots__ = ('val_c',)
+    
+        def __init__(self, val_p, val_c):
+            super().__init__(val_p)
+            self.val_c = val_c
+    
+    instance = Child(1, 2)
+    
+    Which of the following statements about instance is true?
+    
+    A) instance will have a __dict__ attribute, containing {'val_p': 1}.
+    B) instance will not have a __dict__ attribute, and attempts to access it will raise an AttributeError.
+    C) instance will have a __dict__ attribute, containing {'val_c': 2}.
+    D) instance will have a __dict__ attribute, but it will be empty.
+
+
+======================================================================
+  --- End of Question Paper ---
+======================================================================
