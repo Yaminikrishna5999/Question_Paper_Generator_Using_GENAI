@@ -820,8 +820,7 @@ def _config():
     cfg["total_questions"] = sum(cfg.get("counts_per_type", {}).values())
     
     s1c1, s1c2 = st.columns(2)
-    # 🚨 RESTORED MANUAL INPUT 🚨
-    cfg["num_sections"] = s1c2.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
+    cfg["num_sections"] = s1c1.number_input("Number of Sections (Section A, B, C...)", 1, 5, min(cfg["num_sections"], 5), key="cfg_num_sections", help="Max 5 sections allowed for professional formatting.")
     
     st.markdown('<div class="cfg-sub-label">14. Automatically Generated Sections</div>', unsafe_allow_html=True)
     sec_names = [f"Section {chr(65+i)}" for i in range(cfg["num_sections"])]
