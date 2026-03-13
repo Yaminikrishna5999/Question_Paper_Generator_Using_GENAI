@@ -981,7 +981,7 @@ def _run_generation(cfg):
                         paper["db_id"] = save_paper(user_email, paper)
                         add_audit_log(user_email, "Paper Generated", f"Generated Set {label} for {cfg.get('exam_name')}")
                         
-                    st.session_state.v5_papers.insert(0, paper)
+                    st.session_state.v5_papers.append(paper)
                     # Add current set text to history for next set exclusion
                     history_for_uniqueness += "\n" + raw_response
                 else:
@@ -1155,9 +1155,9 @@ def _preview():
     pid = st.session_state.get("preview_paper_id")
     if pid:
         p = next((x for x in papers_list if x["id"] == pid),
-                 papers_list[0] if papers_list else {})
+                 papers_list[-1] if papers_list else {})
     else:
-        p = papers_list[0] if papers_list else {}
+        p = papers_list[-1] if papers_list else {}
 
     cfg = p.get('cfg', {})
     raw_instr = cfg.get('instructions', '1. Answer all questions.\n2. Figures to the right indicate full marks.')
@@ -1356,9 +1356,9 @@ def _markscheme():
     pid = st.session_state.get("preview_paper_id")
     if pid:
         p = next((x for x in papers_list if x["id"] == pid),
-                 papers_list[0] if papers_list else {})
+                 papers_list[-1] if papers_list else {})
     else:
-        p = papers_list[0] if papers_list else {}
+        p = papers_list[-1] if papers_list else {}
 
     if p:
         html = f"""
