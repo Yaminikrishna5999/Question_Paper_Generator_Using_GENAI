@@ -833,7 +833,7 @@ def _config():
     st.markdown('<div class="cfg-sub-label">16. Question Types</div>', unsafe_allow_html=True)
     cfg["question_types"] = st.multiselect("Select options", 
         ["MCQ", "Fill in the Blanks", "Very Short Answer", "Short Answer", "Long Answer", "Descriptive Questions"],
-        default=cfg["question_types"])
+        default=cfg["question_types"], key="cfg_qtypes")
     
     st.divider()
     if cfg["question_types"]:
