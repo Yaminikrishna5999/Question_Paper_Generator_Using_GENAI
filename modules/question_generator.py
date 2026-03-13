@@ -276,7 +276,9 @@ Start generating now starting from 1:"""
             
         # Split on numbered starts at beginning of line ONLY if followed by a bracketed metadata tag.
         # This prevents splitting on numbered lists inside answer explanations.
-        blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*\[)', raw)
+        # Split on numbered starts: "1. ", "Q1. ", "1) " at the start of a line.
+        # This no longer requires a bracketed tag to be present, making it much more robust.
+        blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*)', raw)
         qs = []
         qtypes = cfg.get("question_types", ["MCQ", "Short Answer"])
         # Map each type to a specific section sequentially
@@ -299,11 +301,13 @@ Start generating now starting from 1:"""
             if tm:
                 qtype = tm.group(1)
             else:
-                # Guess based on content if missing
-                if re.search(r'^[a-d][\.\)]', "\n".join(lines), re.M | re.I):
-                    qtype = "MCQ"
-                else:
-                    qtype = qtypes[i % len(qtypes)] if qtypes else "Short Answer"
+                # Look for type keywords anywhere in the block if tag is missing
+                lblk = blk.lower()
+                if "mcq" in lblk or "multiple choice" in lblk: qtype = "MCQ"
+                elif "short" in lblk: qtype = "Short Answer"
+                elif "long" in lblk: qtype = "Long Answer"
+                elif "fill" in lblk: qtype = "Fill in the Blanks"
+                else: qtype = qtypes[i % len(qtypes)] if qtypes else "Short Answer"
             
             # Normalize qtype
             if "Short" in qtype: qtype = "Short Answer"
