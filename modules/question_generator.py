@@ -168,9 +168,10 @@ STRICT REQUIREMENTS:
 4. STUDENT CLARITY: Use simple, direct language. The goal of the question must be immediately obvious.
 5. ACCURACY: All questions and answers MUST be factually correct based ON THE SOURCE TEXT ONLY.
 6. UNDERSTANDABILITY: Use clear, academic language. Ensure follow-up steps in traces are logically consistent.
-7. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
-8. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
-9. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
+7. ABSOLUTE ANSWER ACCURACY: You MUST provide the CORRECT and ABSOLUTE answer for every question based EXCLUSIVELY on the <SOURCE_TEXT>. Do not be vague.
+8. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+9. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
+10. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
 
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
@@ -185,7 +186,7 @@ a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
-Answer: [Correct Option/Explanation]
+CORRECT_ANSWER: [Absolute Correct Answer/Explanation]
 Marks: [Value]
 
 Start generating now starting from 1:"""
@@ -212,9 +213,10 @@ STRICT REQUIREMENTS:
 4. STUDENT CLARITY: Phrase questions simply and directly so they are easy for students to understand.
 5. ACCURACY: Ensure the answer is exactly correct for the question. Logic must be flawless.
 6. UNDERSTANDABILITY: Questions must be grammatically perfect and easy for students to follow.
-7. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
-8. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
-9. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
+7. ABSOLUTE ANSWER ACCURACY: You MUST generate the CORRECT and ABSOLUTE answer for every question. Logic must be flawless.
+8. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
+9. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
+10. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
 
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
@@ -222,7 +224,7 @@ a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
-Answer: [Correct Option/Explanation]
+CORRECT_ANSWER: [Absolute Correct Answer/Explanation]
 Marks: [Value]
 
 Start generating now starting from 1:"""
@@ -329,10 +331,10 @@ Start generating now starting from 1:"""
                 l_lower = ls.lower()
                 
                 # Check for terminators
-                if l_lower.startswith("answer:"):
+                if l_lower.startswith("correct_answer:") or l_lower.startswith("answer:"):
                     parts = ln.split(":", 1)
-                    ans = parts[1].strip() if len(parts) > 1 else "See model answer."
-                    parsing_mode = "DONE"
+                    ans = parts[1].strip() if len(parts) > 1 else ""
+                    parsing_mode = "ANSWER"
                     continue
                 elif l_lower.startswith("marks:"):
                     m_match = re.search(r'\d+', ls)
@@ -354,6 +356,12 @@ Start generating now starting from 1:"""
                     opt_content = re.sub(r'^[a-d][\.\)]\s*', '', ls, flags=re.I).strip()
                     if opt_content:
                         options_list.append(opt_content)
+                elif parsing_mode == "ANSWER":
+                    # Capture multi-line answer content
+                    if ans:
+                        ans += "\n" + ls
+                    else:
+                        ans = ls
 
             qtxt = "\n".join(qtxt_lines).strip() # PRESERVE NEWLINES
             if not qtxt: continue
