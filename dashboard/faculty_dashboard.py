@@ -1314,13 +1314,25 @@ def _answers():
         st.info("🔑 Generate papers first.")
         return
     for p in st.session_state.v5_papers:
-        with st.expander(f"🔑 {p['title']} — {p['name']}"):
+        # Move timestamp and metadata to expander label for consistency
+        created_at = p.get('created_at', p.get('date', 'Unknown Time'))
+        expander_label = f"🔑 {p['name']} | 🕒 {created_at} | Set {p['set']}"
+        
+        with st.expander(expander_label):
+            cfg = p.get('cfg', {})
+            # Professional Header inside Answer Key
             st.markdown(f"""
-            <div style="background:white;border:1px solid {C.sbBd};border-radius:10px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
-                <div style="font-size:12px;color:{C.t3};"><b>Generated Date & Time:</b> {p.get('created_at', 'N/A')}</div>
-                <div style="font-size:10px;padding:3px 8px;background:{C.pageBg};border-radius:5px;color:{C.violet};border:1px solid {C.sbBd};">Set {p.get('set', 'A')}</div>
+            <div style="background:white; padding:15px; border:1px solid {C.sbBd}; border-radius:8px; margin-bottom:15px; border-left:5px solid {C.sky};">
+                <div style="font-size:10px; font-weight:700; color:{C.t4}; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Official Answer Key</div>
+                <div style="font-size:14px; font-weight:800; color:{C.t1};">{cfg.get('exam_name', 'Examination')}</div>
+                <div style="font-size:12px; color:{C.t3}; margin-top:2px;">
+                    {cfg.get('course_name', '')} ({cfg.get('course_code', '')}) &nbsp;|&nbsp; 
+                    Set: <b>{p.get('set', 'A')}</b> &nbsp;|&nbsp; 
+                    Generated: <b>{created_at}</b>
+                </div>
             </div>
             """, unsafe_allow_html=True)
+
             for q in p["questions"]:
                 st.markdown(f"""
                 <div style="background:{C.pageBg};border-radius:10px;padding:12px;

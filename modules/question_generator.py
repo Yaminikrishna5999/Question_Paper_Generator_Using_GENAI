@@ -73,7 +73,7 @@ class QuestionGenerator:
         MAX_RETRIES = 2
         MAX_DUPLICATE_RETRIES = 2
         
-        prompt = self._build_prompt(topic, difficulty, question_type, marks=marks, pdf_context=pdf_context)
+        prompt = self._build_prompt(topic, difficulty, question_type, pdf_context=pdf_context)
         model = self._get_working_model()
         
         try:
@@ -133,19 +133,7 @@ class QuestionGenerator:
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))
         sections = ", ".join([f"Section {chr(65+i)}" for i in range(cfg.get("num_sections",3))])
         
-        # Enhanced Mark-based Requirements for Academic Rigor
-        marks_ln = []
-        for qt in qtypes:
-            m = cfg.get('marks_per_type', {}).get(qt, 5)
-            if m >= 10:
-                req = f"{m} marks. REQUIRED: Comprehensive university-level essay (min 300-500 words). Must include: Introduction, Background, Core Analysis with sub-headings, and a Conclusion."
-            elif m >= 5:
-                req = f"{m} marks. REQUIRED: Detailed technical explanation (min 100-150 words). Must use technical terminology and provide logical flow."
-            else:
-                req = f"{m} marks. REQUIRED: Concise technical answer (30-50 words). Must be precise and factually dense."
-            marks_ln.append(f"  - {qt}: {req}")
-        
-        marks_str = "\n".join(marks_ln)
+        marks_ln = "\n".join([f"  - {qt}: {cfg.get('marks_per_type', {}).get(qt, 5)} marks" for qt in qtypes])
         prev_note = f"\n\nAVOID THESE EXISTING QUESTIONS:\n{prev_qs}" if prev_qs else ""
         
         is_file_mode = cfg.get("source_mode") == "File Upload" and bool(cfg.get("file_content"))
@@ -175,8 +163,7 @@ PAPER STRUCTURE:
 - TYPES: {', '.join(qtypes)}
 - DIFFICULTY: Easy={easy_n}, Medium={med_n}, Hard={hard_n}
 - BLOOM LEVELS: {bloom}
-- MARKS & DEPTH: 
-{marks_str}
+- MARKS: {marks_ln}
 
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
@@ -184,7 +171,7 @@ a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
-Answer: [Correct Option/Detailed Explanation - MUST MEET WORD COUNT REQS ABOVE]
+Answer: [Correct Option/Explanation]
 Marks: [Value]
 
 Start generating now starting from 1:"""
@@ -211,17 +198,13 @@ STRICT REQUIREMENTS:
 5. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
 6. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
 
-- BLOOM LEVELS: {bloom}
-- MARKS & DEPTH: 
-{marks_str}
-
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
 a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
-Answer: [Correct Option/Detailed Explanation - MUST MEET WORD COUNT REQS ABOVE]
+Answer: [Correct Option/Explanation]
 Marks: [Value]
 
 Start generating now starting from 1:"""
@@ -366,7 +349,7 @@ Start generating now starting from 1:"""
             
         return qs
 
-    def _build_prompt(self, topic, difficulty, question_type, marks=None, pdf_context=None):
+    def _build_prompt(self, topic, difficulty, question_type, pdf_context=None):
         """Build AI prompt based on parameters, optionally using PDF syllabus content"""
         
         # If PDF content is provided, prepend it as rich context
@@ -381,17 +364,6 @@ Use this content as your primary source of knowledge to generate the question:
 Now, based strictly on the above content, """
         else:
             context_block = ""
-
-        # Depth instructions based on marks (For Single/Batch prompts)
-        mks = marks or 5
-        depth_instr = ""
-        if question_type == 'Short Answer':
-            if mks <= 2: depth_instr = "precise technical answer (30-50 words)"
-            elif mks <= 5: depth_instr = "detailed explanation with technical sub-points (100-150 words)"
-            else: depth_instr = "comprehensive multi-paragraph technical discussion (200+ words)"
-        elif question_type == 'Long Answer':
-            if mks <= 5: depth_instr = "structured technical explanation with logical flow and bullet points (150+ words)"
-            else: depth_instr = "exhaustive university-level essay including Introduction, Detailed Body with headers, and Conclusion (300-500 words)"
         prompts = {
             'MCQ': f"""{context_block}generate a {difficulty} level multiple-choice question about: {topic}
 
@@ -410,29 +382,29 @@ C) [option]
 D) [option]
 ANSWER: [letter]""",
 
-            'Short Answer': f"""{context_block}generate a {difficulty} level short answer question ({mks} marks) about: {topic}
+            'Short Answer': f"""{context_block}generate a {difficulty} level short answer question about: {topic}
 
 Requirements:
-- Requires {depth_instr}
+- Requires 2-4 sentence answer
 - Tests conceptual understanding
 - Clear and specific
 - Academic language
 
 Format your response EXACTLY as:
 QUESTION: [question text]
-ANSWER: [model answer]""",
+ANSWER: [brief model answer in 2-4 sentences]""",
 
-            'Long Answer': f"""{context_block}generate a {difficulty} level long answer/essay question ({mks} marks) about: {topic}
+            'Long Answer': f"""{context_block}generate a {difficulty} level long answer/essay question about: {topic}
 
 Requirements:
-- Requires {depth_instr}
+- Requires detailed explanation (1-2 paragraphs)
 - Tests deep understanding and analysis
 - Open-ended but focused
 - Academic language
 
 Format your response EXACTLY as:
 QUESTION: [question text]
-ANSWER: [detailed answer]""",
+ANSWER: [key points to cover as bullet points]""",
 
             'True/False': f"""{context_block}generate a {difficulty} level True/False question about: {topic}
 
