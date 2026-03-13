@@ -276,51 +276,66 @@ Start generating now starting from 1:"""
         else:
             return [] # No formatted questions found
             
-        # Split on numbered starts at beginning of line ONLY if followed by a bracketed metadata tag.
-        # This prevents splitting on numbered lists inside answer explanations.
-        # Split on numbered starts: "1. ", "Q1. ", "1) " at the start of a line.
-        # This no longer requires a bracketed tag to be present, making it much more robust.
-        blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*)', raw)
+        # ── ROBUST BLOCK SPLITTING ──
+        # Split on numbered starts ONLY if they are likely a new question header.
+        # We look for a number followed by a bracket or significant text, usually preceded by double newline.
+        # However, to be safe across models, we split and then validate.
+        raw_blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*)', raw)
         qs = []
         qtypes = cfg.get("question_types", ["MCQ", "Short Answer"])
         # Map each type to a specific section sequentially
         type_to_sec = {qt: f"Section {chr(65+i)}" for i, qt in enumerate(qtypes)}
         
         topics = cfg.get("topics") or ["General"]
-        
-        for i, blk in enumerate(blocks):
+        for i, blk in enumerate(raw_blocks):
             if not blk.strip(): continue
             lines = blk.strip().split('\n')
             
-            # 1. Metadata extraction (Scan whole block for brackets)
+            # 1. Metadata extraction (Precise search for configured types)
             dm = re.search(r'\[(EASY|MEDIUM|HARD)\]', blk, re.I)
-            tm = re.search(r'\[(MCQ|Fill|Short|Long|Descriptive|True)\]', blk, re.I)
             bm = re.search(r'\[(Remember|Understand|Apply|Analyze|Evaluate|Create)\]', blk, re.I)
             
-            diff = {"EASY":"Easy","MEDIUM":"Medium","HARD":"Hard"}.get(dm.group(1).upper() if dm else "MEDIUM", "Medium")
+            # Precise Question Type Matching:
+            # We check the block for ANY of the user-selected types explicitly.
+            qtype = None
+            for qt in qtypes:
+                if re.search(rf'\[{re.escape(qt)}\]', blk, re.I):
+                    qtype = qt
+                    break
             
-            # Safe QType fallback
-            if tm:
-                qtype = tm.group(1)
-            else:
-                # Look for type keywords anywhere in the block if tag is missing
+            if not qtype:
+                # Secondary check: if [Type] is missing, check content
                 lblk = blk.lower()
                 if "mcq" in lblk or "multiple choice" in lblk: qtype = "MCQ"
                 elif "short" in lblk: qtype = "Short Answer"
                 elif "long" in lblk: qtype = "Long Answer"
                 elif "fill" in lblk: qtype = "Fill in the Blanks"
-                else: qtype = qtypes[i % len(qtypes)] if qtypes else "Short Answer"
-            
-            # Normalize qtype
-            if "Short" in qtype: qtype = "Short Answer"
-            if "Long" in qtype: qtype = "Long Answer"
-            if "Fill" in qtype: qtype = "Fill in the Blanks"
-            
-            bloom = bm.group(1).capitalize() if bm else "Remember"
+                else:
+                    # If it's a small fragment and we're not at the first block, 
+                    # it's likely a continuation of the PREVIOUS answer (e.g. from internal list parsing error)
+                    if i > 0 and len(qs) > 0:
+                        # Append to previous answer
+                        qs[-1]["a"] += "\n" + blk.strip()
+                        continue
+                    qtype = qtypes[i % len(qtypes)] if qtypes else "Short Answer"
             
             # 2. Sequential Extraction
             qtxt_lines = []
             options_list = []
+            
+            # Normalize qtype specifically for section mapping (matching UI strings)
+            # Only normalize if it's a known substring and not already a precise match
+            if qtype not in qtypes:
+                if "Very Short" in qtype: qtype = "Very Short Answer"
+                elif "Short" in qtype and "Very" not in qtype: qtype = "Short Answer"
+                elif "Long" in qtype: qtype = "Long Answer"
+                elif "Fill" in qtype: qtype = "Fill in the Blanks"
+                elif "Descriptive" in qtype: qtype = "Descriptive Questions"
+                elif "MCQ" in qtype or "Choice" in qtype: qtype = "MCQ"
+            
+            diff = {"EASY":"Easy","MEDIUM":"Medium","HARD":"Hard"}.get(dm.group(1).upper() if dm else "MEDIUM", "Medium")
+            bloom = bm.group(1).capitalize() if bm else "Remember"
+            
             ans, marks_val = "See model answer.", cfg.get('marks_per_type', {}).get(qtype, 5)
             
             parsing_mode = "QUESTION" # Modes: QUESTION, OPTIONS
