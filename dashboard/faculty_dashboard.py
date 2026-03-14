@@ -1478,6 +1478,7 @@ def _statistics():
     type_counts = {"MCQ": 0, "Short Answer": 0, "Long Answer": 0, "Other": 0}
     diff_counts = {"Easy": 0, "Medium": 0, "Hard": 0}
     bloom_counts = {"Remember": 0, "Understand": 0, "Apply": 0, "Analyze": 0, "Evaluate": 0, "Create": 0}
+    topic_map = {}
     
     for p in papers:
         total_q += p.get("qCnt", 0)
@@ -1500,6 +1501,14 @@ def _statistics():
                     if b in bl: 
                         bloom_counts[b] += 1
                         break
+        
+        # Topic Extraction
+        cfg = p.get("cfg", {})
+        ts = cfg.get("topics", [])
+        if not ts and cfg.get("units"): ts = cfg.get("units") # Fallback to units
+        if ts:
+            for t in ts:
+                topic_map[t] = topic_map.get(t, 0) + 1
 
     # 2. Premium Metric Cards
     m1, m2, m3, m4 = st.columns(4)
@@ -1518,7 +1527,28 @@ def _statistics():
     _metric_card(m1, "Total Papers", len(papers), "📄", C.gPink)
     _metric_card(m2, "Total Questions", total_q, "❓", C.gViolet)
     _metric_card(m3, "Total Marks", total_m, "🏆", C.gSkyBlue)
-    _metric_card(m4, "Avg Q / Paper", round(total_q/len(papers), 1), "📈", C.gOrange)
+    _metric_card(m4, "Avg Q / Paper", round(total_q/len(papers), 1) if papers else 0, "📈", C.gOrange)
+
+    st.markdown('<div style="height:30px;"></div>', unsafe_allow_html=True)
+
+    # Topic Heatmap Section
+    if topic_map:
+        st.markdown(f'<div style="font-size:13px; font-weight:700; color:{C.t2}; margin-bottom:15px;">Syllabus Topic Heatmap</div>', unsafe_allow_html=True)
+        t_cols = st.columns(min(len(topic_map), 5))
+        max_t = max(topic_map.values()) if topic_map else 1
+        
+        for idx, (t, count) in enumerate(sorted(topic_map.items(), key=lambda x: x[1], reverse=True)):
+            intensity = min(0.1 + (count / max_t) * 0.9, 1.0)
+            col_idx = idx % len(t_cols)
+            with t_cols[col_idx]:
+                st.markdown(f"""
+                <div style="background:rgba(114,9,183,{intensity}); padding:12px; border-radius:10px; color:white; 
+                            text-align:center; margin-bottom:10px; border:1px solid rgba(114,9,183,0.1);
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <div style="font-size:14px; font-weight:800;">{count}</div>
+                    <div style="font-size:9px; font-weight:700; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{t}">{t}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     st.markdown('<div style="height:30px;"></div>', unsafe_allow_html=True)
 
