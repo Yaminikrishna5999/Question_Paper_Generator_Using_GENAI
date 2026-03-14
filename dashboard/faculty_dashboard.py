@@ -1683,10 +1683,12 @@ def _settings():
                 <div style="width:50px; height:50px; border-radius:12px; background:{C.gSkyBlue}; 
                             display:flex; align-items:center; justify-content:center; font-size:20px;">🎨</div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences</div>
-                    <div style="font-size:11px; color:{C.t3};">Customize your dashboard</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences & Theme</div>
+                    <div style="font-size:11px; color:{C.t3};">Customize your dashboard experience</div>
                 </div>
             </div>""", unsafe_allow_html=True)
+        st.selectbox("Appearance", ["Light Mode", "Dark Mode", "Auto (System theme)"], key="set_theme", index=2)
+        st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
         st.toggle("Push Notifications", value=True, key="set_push")
         st.toggle("Auto-save Config", value=True, key="set_autosave")
         st.toggle("Advanced Model Previews", value=False, key="set_previews")
