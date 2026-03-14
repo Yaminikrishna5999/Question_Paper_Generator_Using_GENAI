@@ -1016,7 +1016,24 @@ def _run_generation(cfg):
 
     progress_bar.progress(1.0)
     status_msg.success(f"Successfully generated {cfg['num_sets']} question paper sets!")
-    time.sleep(1)
+    
+    # 🚨 AUTO-RESET CONFIGURATION FOR NEXT SESSION 🚨
+    st.session_state.v5_config = {
+        "exam_name": "", "inst_name": "", "dept": "Select Department",
+        "course_name": "", "course_code": "", "academic_year": "Select Year",
+        "semester": "Select Semester", "exam_type": "Select Type",
+        "exam_date": datetime.now().date(), "duration": "Select Duration",
+        "max_marks": 0, "total_questions": 0, "num_sections": 0, "instructions": "",
+        "question_types": [],
+        "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
+        "counts_per_type": {}, "difficulty": "Select Difficulty", "bloom": [],
+        "source_mode": "Select Mode", "topics": [], "file_content": None,
+        "units": [], "unit_dist": {}, "randomize": True,
+        "avoid_duplicates": True, "include_prev": False, "num_sets": 0
+    }
+    if "cfg_qtypes" in st.session_state: del st.session_state["cfg_qtypes"]
+    
+    time.sleep(1.5)
     st.session_state.v5_page = "papers"
     st.rerun()
 
