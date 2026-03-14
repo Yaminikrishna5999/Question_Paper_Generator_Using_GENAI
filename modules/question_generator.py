@@ -52,13 +52,8 @@ class QuestionGenerator:
         self.current_model = "gemini-1.5-flash" # Current stable default
         self._exhausted_models = set()
         
-        # Pre-defined fallback list for stability (avoiding unknown models via API list)
-        self.fallback_preference = [
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash-8b"
-        ]
+        # Use fallback list from global Config for stability
+        self.fallback_preference = Config.FALLBACK_MODELS
     
     @staticmethod
     def validate_key(key):
