@@ -172,6 +172,7 @@ STRICT REQUIREMENTS:
 8. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
 9. MCQ FORMAT: Exactly 4 options (a, b, c, d) VERTICALLY.
 10. NO REDUNDANT TAGS: Keep the question body clean. Do not include marks or metadata in the question text.
+11. COMPLETE DISTRIBUTION: You MUST generate questions for EVERY type listed in the distribution. Do not skip any type (e.g., if Short Answer is requested, it MUST be generated).
 
 PAPER STRUCTURE:
 - EXAM: {exam_name} | Set {set_label} | {semester}
@@ -217,6 +218,7 @@ STRICT REQUIREMENTS:
 8. NO NUMBERED LISTS IN ANSWERS: Use bullet points (-) or letters (i, ii...) for lists within an answer. NEVER use "1.", "2." etc. inside an answer.
 9. MCQ FORMAT: List options a, b, c, d VERTICALLY. Use the number format "1. " for questions.
 10. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
+11. COMPLETE DISTRIBUTION: You MUST generate questions for EVERY type listed in the distribution. Do not skip any type (e.g., if Short Answer is requested, it MUST be generated).
 
 FORMAT:
 1. [DIFFICULTY][TYPE] Question text?
@@ -277,10 +279,9 @@ Start generating now starting from 1:"""
             return [] # No formatted questions found
             
         # ── ROBUST BLOCK SPLITTING ──
-        # Split on numbered starts ONLY if they are likely a new question header.
-        # We look for a number followed by a bracket or significant text, usually preceded by double newline.
-        # However, to be safe across models, we split and then validate.
-        raw_blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*)', raw)
+        # Split on numbered starts: "1. ", "Q1. ", "1) " at the start of a line.
+        # We ALSO split on explicit Section headers like "Section B:" to avoid merging them.
+        raw_blocks = re.split(r'\n(?=Q?\d+[\.\:\)]\s*|Section\s+[A-Z][\.\:]\s*)', raw)
         qs = []
         qtypes = cfg.get("question_types", ["MCQ", "Short Answer"])
         # Map each type to a specific section sequentially
@@ -309,29 +310,33 @@ Start generating now starting from 1:"""
                 if "mcq" in lblk or "multiple choice" in lblk: qtype = "MCQ"
                 elif "short" in lblk: qtype = "Short Answer"
                 elif "long" in lblk: qtype = "Long Answer"
-                elif "fill" in lblk: qtype = "Fill in the Blanks"
                 else:
                     # If it's a small fragment and we're not at the first block, 
                     # it's likely a continuation of the PREVIOUS answer (e.g. from internal list parsing error)
                     if i > 0 and len(qs) > 0:
-                        # Append to previous answer
-                        qs[-1]["a"] += "\n" + blk.strip()
-                        continue
+                        # Append to previous answer if no tags and it looks like a continuation
+                        if not dm and not bm:
+                            qs[-1]["a"] += "\n" + blk.strip()
+                            continue
                     qtype = qtypes[i % len(qtypes)] if qtypes else "Short Answer"
             
-            # 2. Sequential Extraction
-            qtxt_lines = []
-            options_list = []
+            # Normalize qtype specifically for section mapping (matching UI strings exactly)
+            qtype_orig = qtype
+            qtype_norm = qtype.lower()
             
-            # Normalize qtype specifically for section mapping (matching UI strings)
-            # Only normalize if it's a known substring and not already a precise match
+            if "very short" in qtype_norm: qtype = "Very Short Answer"
+            elif "short" in qtype_norm and "very" not in qtype_norm: qtype = "Short Answer"
+            elif "long" in qtype_norm: qtype = "Long Answer"
+            elif "fill" in qtype_norm: qtype = "Fill in the Blanks"
+            elif "descriptive" in qtype_norm: qtype = "Descriptive Questions"
+            elif "mcq" in qtype_norm or "multiple choice" in qtype_norm: qtype = "MCQ"
+            
+            # Final fallback: if normalized type is not in selected types, try to find a partial match
             if qtype not in qtypes:
-                if "Very Short" in qtype: qtype = "Very Short Answer"
-                elif "Short" in qtype and "Very" not in qtype: qtype = "Short Answer"
-                elif "Long" in qtype: qtype = "Long Answer"
-                elif "Fill" in qtype: qtype = "Fill in the Blanks"
-                elif "Descriptive" in qtype: qtype = "Descriptive Questions"
-                elif "MCQ" in qtype or "Choice" in qtype: qtype = "MCQ"
+                for qt in qtypes:
+                    if qt.lower() in qtype_norm:
+                        qtype = qt
+                        break
             
             diff = {"EASY":"Easy","MEDIUM":"Medium","HARD":"Hard"}.get(dm.group(1).upper() if dm else "MEDIUM", "Medium")
             bloom = bm.group(1).capitalize() if bm else "Remember"
@@ -339,6 +344,8 @@ Start generating now starting from 1:"""
             ans, marks_val = "See model answer.", cfg.get('marks_per_type', {}).get(qtype, 5)
             
             parsing_mode = "QUESTION" # Modes: QUESTION, OPTIONS
+            qtxt_lines = []
+            options_list = []
             
             for ln in lines:
                 ls = ln.strip()
