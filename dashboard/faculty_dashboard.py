@@ -53,6 +53,38 @@ class C:
     t3        = "#6E6893"
     t4        = "#A89EC4"
 
+def _update_theme_colors():
+    """Updates the Gold Standard Palette based on session theme."""
+    theme = st.session_state.get("set_theme", "Auto (System theme)")
+    
+    # Reset to Light (Default)
+    C.pageBg    = "#F8F4FD"
+    C.sidebar   = "#FFFFFF"
+    C.sbBd      = "#F0EBF8"
+    C.sbLine    = "#EDE8F5"
+    C.card      = "#FFFFFF"
+    C.cardBd    = "#EDE8F5"
+    C.inputBg   = "#F4F0FB"
+    C.inputBd   = "#E4DCF5"
+    C.t1        = "#2D1B69"
+    C.t2        = "#4A3880"
+    C.t3        = "#6E6893"
+    C.t4        = "#A89EC4"
+
+    if theme == "Dark Mode":
+        C.pageBg    = "#0F0C16"
+        C.sidebar   = "#181422"
+        C.sbBd      = "#251F32"
+        C.sbLine    = "#2D253E"
+        C.card      = "#181422"
+        C.cardBd    = "#2D253E"
+        C.inputBg   = "#211C2E"
+        C.inputBd   = "#3A3350"
+        C.t1        = "#EDE8F5"
+        C.t2        = "#B9A9D9"
+        C.t3        = "#948FB0"
+        C.t4        = "#7B759A"
+
 # ═══════════════════════════════════════════════════════════════
 # STATIC DATA  (UI/display only — NOT used for question generation)
 # ═══════════════════════════════════════════════════════════════
@@ -277,8 +309,8 @@ def _css():
     .page-content{{animation:fadeUp 0.22s ease;}}
 
     /* ── Cards ── */
-    .pg-card{{
-        background:#fff;
+    .pg-card {{
+        background:{C.card};
         border:1px solid {C.cardBd};
         border-radius:13px;
         padding:16px;
@@ -399,7 +431,8 @@ def show_v5_faculty_dashboard():
         # Re-fetch papers for the NEW user
         st.session_state["v5_papers"] = get_user_papers(cp_email) if cp_email else []
 
-    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), ("markscheme_paper_id", None)]:
+    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), 
+                  ("markscheme_paper_id", None), ("set_theme", "Auto (System theme)")]:
         if k not in st.session_state:
             st.session_state[k] = v
 
@@ -447,6 +480,7 @@ def show_v5_faculty_dashboard():
     
 
 
+    _update_theme_colors()
     _css()
 
     u    = st.session_state.get("user_data", {})
@@ -558,7 +592,7 @@ def show_v5_faculty_dashboard():
             ab, ac, ad, at = "#FFF0F0", "#E74C3C", "#FACDD0", "No API Key"
         st.markdown(f"""
         <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-          <div style="background:white;padding:4px 9px;border-radius:20px;
+          <div style="background:{C.card};padding:4px 9px;border-radius:20px;
                       border:1px solid {C.sbBd};font-size:9px;font-weight:600;color:{C.t3};">
             🕐 {datetime.now().strftime("%I:%M %p")}</div>
           <div style="background:{ab};color:{ac};padding:4px 9px;border-radius:20px;
@@ -1286,7 +1320,7 @@ def _faculty_alerts():
     notifs = get_notifications(user_email)
     
     st.markdown(f"""
-    <div style="background:white; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
+    <div style="background:{C.card}; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
         <h3 style="margin:0; color:{C.t1}; font-size:16px; font-weight:700;">🔔 Faculty Alerts & Notifications</h3>
         <p style="font-size:12px; color:{C.t3}; margin-top:4px;">Stay updated on your paper statuses and system announcements.</p>
     </div>
@@ -1328,7 +1362,7 @@ def _faculty_alerts():
         else:
             for n in read_notifs:
                 st.markdown(f"""
-                <div style="padding:12px 16px; background:white; border:1px solid #f0f0f0; border-radius:8px; margin-bottom:10px; opacity:0.75;">
+                <div style="padding:12px 16px; background:{C.card}; border:1px solid {C.cardBd}; border-radius:8px; margin-bottom:10px; opacity:0.85;">
                     <div style="font-size:13px; color:{C.t2};">{n['message']}</div>
                     <div style="font-size:10px; color:{C.t4}; margin-top:4px;">{n['time']}</div>
                 </div>
@@ -1352,7 +1386,7 @@ def _answers():
             cfg = p.get('cfg', {})
             # Professional Header inside Answer Key
             st.markdown(f"""
-            <div style="background:white; padding:15px; border:1px solid {C.sbBd}; border-radius:8px; margin-bottom:15px; border-left:5px solid {C.sky};">
+            <div style="background:{C.card}; padding:15px; border:1px solid {C.sbBd}; border-radius:8px; margin-bottom:15px; border-left:5px solid {C.sky};">
                 <div style="font-size:10px; font-weight:700; color:{C.t4}; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Official Answer Key</div>
                 <div style="font-size:14px; font-weight:800; color:{C.t1};">{cfg.get('exam_name', 'Examination')}</div>
                 <div style="font-size:12px; color:{C.t3}; margin-top:2px;">
@@ -1668,12 +1702,14 @@ def _settings():
                     {user_initials}
                 </div>
                 <div>
+                <div>
                     <div style="font-size:15px; font-weight:800; color:{C.t1};">Profile Settings</div>
-                    <div style="font-size:11px; color:{C.t3};">Note: These details are provided by the Admin and cannot be changed.</div>
+                    <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
-        st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
+        st.text_input("Full Name", value=u.get("name", ""), key="set_name")
+        st.text_input("Email Address", value=u.get("email", ""), key="set_email")
+        st.button("Update Profile", type="primary", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
@@ -1692,35 +1728,6 @@ def _settings():
         st.toggle("Push Notifications", value=True, key="set_push")
         st.toggle("Auto-save Config", value=True, key="set_autosave")
         st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
-    
-    # Password Management Card
-    st.markdown(f"""
-    <div class="pg-card" style="padding:22px;">
-        <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
-            <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
-                        display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
-            <div>
-                <div style="font-size:15px; font-weight:800; color:{C.t1};">Change Password</div>
-                <div style="font-size:11px; color:{C.t3};">Faculty controlled security</div>
-            </div>
-        </div>""", unsafe_allow_html=True)
-    
-    cp1, cp2 = st.columns([1, 1])
-    with cp1:
-        st.text_input("Current Password", type="password", key="set_curr_pass")
-    with cp2:
-        st.text_input("New Password", type="password", key="set_new_pass")
-    
-    cp3, cp4 = st.columns([1, 1])
-    with cp3:
-        st.text_input("Confirm Password", type="password", key="set_conf_pass")
-    with cp4:
-        st.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
-        if st.button("Update Password", type="primary", use_container_width=True):
-            st.success("Verification: Password update logic connected.")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
     
