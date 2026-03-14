@@ -1676,37 +1676,51 @@ def _settings():
         st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+    with col2:
+        st.markdown(f"""
+        <div class="pg-card" style="padding:22px; height:100%;">
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+                <div style="width:50px; height:50px; border-radius:12px; background:{C.gSkyBlue}; 
+                            display:flex; align-items:center; justify-content:center; font-size:20px;">🎨</div>
                 <div>
                     <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences & Theme</div>
                     <div style="font-size:11px; color:{C.t3};">Customize your dashboard experience</div>
                 </div>
             </div>""", unsafe_allow_html=True)
         st.selectbox("Appearance", ["Light Mode", "Dark Mode", "Auto (System theme)"], key="set_theme", index=2)
-        st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
-        
-        # Password Management Section (New Card)
-        st.markdown(f"""
-        <div class="pg-card" style="padding:22px;">
-            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
-                <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
-                            display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
-                <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Change Password</div>
-                    <div style="font-size:11px; color:{C.t3};">Faculty controlled security</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-        st.text_input("Current Password", type="password", key="set_curr_pass")
-        st.text_input("New Password", type="password", key="set_new_pass")
-        st.text_input("Confirm Password", type="password", key="set_conf_pass")
-        if st.button("Update Password", type="primary", use_container_width=True):
-            st.success("Verification: Password update logic connected.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
         st.toggle("Push Notifications", value=True, key="set_push")
         st.toggle("Auto-save Config", value=True, key="set_autosave")
-        st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+    
+    # Password Management Card
+    st.markdown(f"""
+    <div class="pg-card" style="padding:22px;">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+            <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
+                        display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
+            <div>
+                <div style="font-size:15px; font-weight:800; color:{C.t1};">Change Password</div>
+                <div style="font-size:11px; color:{C.t3};">Faculty controlled security</div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+    
+    cp1, cp2 = st.columns([1, 1])
+    with cp1:
+        st.text_input("Current Password", type="password", key="set_curr_pass")
+    with cp2:
+        st.text_input("New Password", type="password", key="set_new_pass")
+    
+    cp3, cp4 = st.columns([1, 1])
+    with cp3:
+        st.text_input("Confirm Password", type="password", key="set_conf_pass")
+    with cp4:
+        st.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
+        if st.button("Update Password", type="primary", use_container_width=True):
+            st.success("Verification: Password update logic connected.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
     
