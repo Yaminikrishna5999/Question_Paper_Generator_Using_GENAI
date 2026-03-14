@@ -45,15 +45,20 @@ def generate_with_retry(client, model_name, contents, max_wait=65):
 
 class QuestionGenerator:
     def __init__(self, api_key=None):
-        usable_key = api_key or Config.GEMINI_API_KEY
-        self.client = genai.Client(api_key=usable_key)
+        import google.genai as g
+        print(f"[AI SDK] Using {g.__name__} from {g.__file__}")
+        self.api_key = api_key or Config.GEMINI_API_KEY
+        self.client = genai.Client(
+            api_key=self.api_key,
+            http_options={'api_version': 'v1'}
+        )
         self.generated_questions = []
         self.errors = []
-        self.current_model = "gemini-1.5-flash" # Current stable default
+        self.current_model = "models/gemini-1.5-flash" # Current stable default
         self._exhausted_models = set()
         
-        # Use fallback list from global Config for stability
-        self.fallback_preference = Config.FALLBACK_MODELS
+        # Use full names with models/ prefix for absolute clarity with the SDK
+        self.fallback_preference = [f"models/{m.replace('models/', '')}" for m in Config.FALLBACK_MODELS]
     
     @staticmethod
     def validate_key(key):
@@ -83,16 +88,16 @@ class QuestionGenerator:
             for m in self.client.models.list():
                 # We want models that support generation
                 if 'generateContent' in m.supported_generation_methods:
-                    # Strip 'models/' prefix for consistency with our list
-                    name = m.name.replace('models/', '')
-                    available.append(name)
+                    # Keep full names (e.g. models/gemini-1.5-flash)
+                    available.append(m.name)
             
             if available:
                 print(f"[AI Discovery] Found {len(available)} accessible models.")
                 # Update our fallback list with discovered models
                 # Keep preference for our staples if they exist
                 new_pref = []
-                for p in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"]:
+                staples = ["models/gemini-1.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-pro", "models/gemini-1.5-flash-8b"]
+                for p in staples:
                     if p in available: new_pref.append(p)
                 
                 # Add anything else found

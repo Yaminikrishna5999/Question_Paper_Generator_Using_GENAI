@@ -150,7 +150,10 @@ def _validate_key(key):
         return False, "no_key"
     try:
         from google import genai
-        client = genai.Client(api_key=key)
+        client = genai.Client(
+            api_key=key,
+            http_options={'api_version': 'v1'}
+        )
         # Probe using models list (lightweight)
         for _ in client.models.list():
             break
