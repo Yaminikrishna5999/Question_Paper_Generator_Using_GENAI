@@ -53,38 +53,6 @@ class C:
     t3        = "#6E6893"
     t4        = "#A89EC4"
 
-def _update_theme_colors():
-    """Updates the Gold Standard Palette based on session theme."""
-    theme = st.session_state.get("set_theme", "Auto (System theme)")
-    
-    # Reset to Light (Default)
-    C.pageBg    = "#F8F4FD"
-    C.sidebar   = "#FFFFFF"
-    C.sbBd      = "#F0EBF8"
-    C.sbLine    = "#EDE8F5"
-    C.card      = "#FFFFFF"
-    C.cardBd    = "#EDE8F5"
-    C.inputBg   = "#F4F0FB"
-    C.inputBd   = "#E4DCF5"
-    C.t1        = "#2D1B69"
-    C.t2        = "#4A3880"
-    C.t3        = "#6E6893"
-    C.t4        = "#A89EC4"
-
-    if theme == "Dark Mode":
-        C.pageBg    = "#0F0C16"
-        C.sidebar   = "#181422"
-        C.sbBd      = "#251F32"
-        C.sbLine    = "#2D253E"
-        C.card      = "#181422"
-        C.cardBd    = "#2D253E"
-        C.inputBg   = "#211C2E"
-        C.inputBd   = "#3A3350"
-        C.t1        = "#EDE8F5"
-        C.t2        = "#B9A9D9"
-        C.t3        = "#948FB0"
-        C.t4        = "#7B759A"
-
 # ═══════════════════════════════════════════════════════════════
 # STATIC DATA  (UI/display only — NOT used for question generation)
 # ═══════════════════════════════════════════════════════════════
@@ -309,8 +277,8 @@ def _css():
     .page-content{{animation:fadeUp 0.22s ease;}}
 
     /* ── Cards ── */
-    .pg-card {{
-        background:{C.card};
+    .pg-card{{
+        background:#fff;
         border:1px solid {C.cardBd};
         border-radius:13px;
         padding:16px;
@@ -431,8 +399,7 @@ def show_v5_faculty_dashboard():
         # Re-fetch papers for the NEW user
         st.session_state["v5_papers"] = get_user_papers(cp_email) if cp_email else []
 
-    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), 
-                  ("markscheme_paper_id", None), ("set_theme", "Auto (System theme)")]:
+    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), ("markscheme_paper_id", None)]:
         if k not in st.session_state:
             st.session_state[k] = v
 
@@ -440,36 +407,36 @@ def show_v5_faculty_dashboard():
     if "v5_config" not in st.session_state:
         st.session_state.v5_config = {
             # Section 1: Identity
-            "exam_name": "Mid Term Examination",
-            "inst_name": "University of Technology",
-            "dept": "Computer Science",
-            "course_name": "Data Structures",
-            "course_code": "CS101",
-            "academic_year": "2nd Year",
-            "semester": "Semester 3",
-            "exam_type": "Mid Exam",
+            "exam_name": "",
+            "inst_name": "",
+            "dept": "Select Department",
+            "course_name": "",
+            "course_code": "",
+            "academic_year": "Select Year",
+            "semester": "Select Semester",
+            "exam_type": "Select Type",
             "exam_date": datetime.now().date(),
-            "duration": "3 Hours",
-            "max_marks": 100,
+            "duration": "Select Duration",
+            "max_marks": 0,
             
             # Section 2: Structure
-            "total_questions": 10,
-            "num_sections": 3,
-            "instructions": "1. Answer all questions.\n2. Figures to the right indicate full marks.",
+            "total_questions": 0,
+            "num_sections": 0,
+            "instructions": "",
             
             # Section 3: Question Config
-            "question_types": ["MCQ", "Short Answer"],
-            "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
-            "counts_per_type": {"MCQ": 5, "Short Answer": 5},
-            "difficulty": "Medium",
-            "bloom": ["Remember", "Understand"],
+            "question_types": [],
+            "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
+            "counts_per_type": {"MCQ": 0, "Short Answer": 0},
+            "difficulty": "Select Difficulty",
+            "bloom": [],
             
             # Section 4/5: Source & Units
-            "source_mode": "Manual Topic Entry",
+            "source_mode": "Select Mode",
             "topics": [],
             "file_content": None,
-            "units": ["Unit 1", "Unit 2", "Unit 3"],
-            "unit_dist": {"Unit 1": 3, "Unit 2": 3, "Unit 3": 4},
+            "units": [],
+            "unit_dist": {},
             
             # Section 6/7: Advanced & Batch
             "randomize": True,
@@ -480,7 +447,6 @@ def show_v5_faculty_dashboard():
     
 
 
-    _update_theme_colors()
     _css()
 
     u    = st.session_state.get("user_data", {})
@@ -592,7 +558,7 @@ def show_v5_faculty_dashboard():
             ab, ac, ad, at = "#FFF0F0", "#E74C3C", "#FACDD0", "No API Key"
         st.markdown(f"""
         <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-          <div style="background:{C.card};padding:4px 9px;border-radius:20px;
+          <div style="background:white;padding:4px 9px;border-radius:20px;
                       border:1px solid {C.sbBd};font-size:9px;font-weight:600;color:{C.t3};">
             🕐 {datetime.now().strftime("%I:%M %p")}</div>
           <div style="background:{ab};color:{ac};padding:4px 9px;border-radius:20px;
@@ -764,34 +730,34 @@ def _config():
         st.markdown('<div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">', unsafe_allow_html=True)
         if st.button("✨ Reset", use_container_width=False):
             st.session_state.v5_config = {
-                "exam_name": "Mid Term Examination",
-                "inst_name": "University of Technology",
-                "dept": "CSE",
-                "course_name": "Data Structures",
-                "course_code": "CS101",
-                "academic_year": "2nd Year",
-                "semester": "Semester 3",
-                "exam_type": "Mid Exam",
+                "exam_name": "",
+                "inst_name": "",
+                "dept": "Select Department",
+                "course_name": "",
+                "course_code": "",
+                "academic_year": "Select Year",
+                "semester": "Select Semester",
+                "exam_type": "Select Type",
                 "exam_date": datetime.now().date(),
-                "duration": "3 Hours",
-                "max_marks": 100,
-                "total_questions": 10,
-                "num_sections": 3,
-                "instructions": "1. Answer all questions.\n2. Figures to the right indicate full marks.",
-                "question_types": ["MCQ", "Short Answer"],
-                "marks_per_type": {"MCQ": 2, "Short Answer": 5, "Long Answer": 10},
-                "counts_per_type": {"MCQ": 5, "Short Answer": 5},
-                "difficulty": "Medium",
-                "bloom": ["Remember", "Understand"],
-                "source_mode": "Manual Topic Entry",
+                "duration": "Select Duration",
+                "max_marks": 0,
+                "total_questions": 0,
+                "num_sections": 0,
+                "instructions": "",
+                "question_types": [],
+                "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
+                "counts_per_type": {},
+                "difficulty": "Select Difficulty",
+                "bloom": [],
+                "source_mode": "Select Mode",
                 "topics": [],
                 "file_content": None,
-                "units": ["Unit 1", "Unit 2", "Unit 3"],
-                "unit_dist": {"Unit 1": 3, "Unit 2": 3, "Unit 3": 4},
+                "units": [],
+                "unit_dist": {},
                 "randomize": True,
                 "avoid_duplicates": True,
                 "include_prev": False,
-                "num_sets": 1
+                "num_sets": 0
             }
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -799,36 +765,36 @@ def _config():
     # ── SECTION 1: Basic Exam Details ──
     _sec("Exam Details", "🏛️")
     r1c1, r1c2 = st.columns(2)
-    cfg["exam_name"] = r1c1.text_input("Exam Name", cfg["exam_name"])
-    cfg["inst_name"] = r1c2.text_input("Institution Name", cfg["inst_name"])
+    cfg["exam_name"] = r1c1.text_input("Exam Name", cfg["exam_name"], placeholder="Enter Exam Name")
+    cfg["inst_name"] = r1c2.text_input("Institution Name", cfg["inst_name"], placeholder="Enter Institution Name")
     
     r2c1, r2c2, r2c3 = st.columns(3)
-    dept_list = ["CSE", "IT", "ECE", "Mechanical", "Civil", "AI/ML", "Data Science", "Computer Science"]
-    curr_dept = cfg.get("dept", "CSE")
+    dept_list = ["Select Department", "CSE", "IT", "ECE", "Mechanical", "Civil", "AI/ML", "Data Science", "Computer Science"]
+    curr_dept = cfg.get("dept", "Select Department")
     d_idx = dept_list.index(curr_dept) if curr_dept in dept_list else 0
     cfg["dept"] = r2c1.selectbox("Department / Branch", dept_list, index=d_idx)
-    cfg["course_name"] = r2c2.text_input("Course Name", cfg["course_name"])
-    cfg["course_code"] = r2c3.text_input("Course Code", cfg["course_code"])
+    cfg["course_name"] = r2c2.text_input("Course Name", cfg["course_name"], placeholder="Enter Course Name")
+    cfg["course_code"] = r2c3.text_input("Course Code", cfg["course_code"], placeholder="Enter Course Code")
     
     r3c1, r3c2, r3c3 = st.columns(3)
-    ay_list = ["1st Year", "2nd Year", "3rd Year", "4th Year"]
-    ay_val = cfg.get("academic_year", "2nd Year")
-    cfg["academic_year"] = r3c1.selectbox("Academic Year", ay_list, index=ay_list.index(ay_val) if ay_val in ay_list else 1)
+    ay_list = ["Select Year", "1st Year", "2nd Year", "3rd Year", "4th Year"]
+    ay_val = cfg.get("academic_year", "Select Year")
+    cfg["academic_year"] = r3c1.selectbox("Academic Year", ay_list, index=ay_list.index(ay_val) if ay_val in ay_list else 0)
     
-    sem_list = [f"Semester {i}" for i in range(1,9)]
-    sem_val = cfg.get("semester", "Semester 3")
-    cfg["semester"] = r3c2.selectbox("Semester", sem_list, index=sem_list.index(sem_val) if sem_val in sem_list else 2)
+    sem_list = ["Select Semester"] + [f"Semester {i}" for i in range(1,9)]
+    sem_val = cfg.get("semester", "Select Semester")
+    cfg["semester"] = r3c2.selectbox("Semester", sem_list, index=sem_list.index(sem_val) if sem_val in sem_list else 0)
     
-    et_list = ["Internal Exam", "Mid Exam", "Final Exam", "Supplementary"]
-    et_val = cfg.get("exam_type", "Mid Exam")
-    cfg["exam_type"] = r3c3.selectbox("Exam Type", et_list, index=et_list.index(et_val) if et_val in et_list else 1)
+    et_list = ["Select Type", "Internal Exam", "Mid Exam", "Final Exam", "Supplementary"]
+    et_val = cfg.get("exam_type", "Select Type")
+    cfg["exam_type"] = r3c3.selectbox("Exam Type", et_list, index=et_list.index(et_val) if et_val in et_list else 0)
     
     r4c1, r4c2, r4c3 = st.columns(3)
     cfg["exam_date"] = r4c1.date_input("Exam Date", value=cfg.get("exam_date", datetime.now().date()))
-    dur_list = ["1 Hour", "2 Hours", "3 Hours", "1.5 Hours", "2.5 Hours"]
-    dur_val = cfg.get("duration", "3 Hours")
-    cfg["duration"] = r4c2.selectbox("Exam Duration", dur_list, index=dur_list.index(dur_val) if dur_val in dur_list else 2)
-    cfg["max_marks"] = r4c3.number_input("Maximum Marks", 1, 100, cfg["max_marks"], key="cfg_max_marks")
+    dur_list = ["Select Duration", "1 Hour", "2 Hours", "3 Hours", "1.5 Hours", "2.5 Hours"]
+    dur_val = cfg.get("duration", "Select Duration")
+    cfg["duration"] = r4c2.selectbox("Exam Duration", dur_list, index=dur_list.index(dur_val) if dur_val in dur_list else 0)
+    cfg["max_marks"] = r4c3.number_input("Maximum Marks", 0, 100, cfg["max_marks"], key="cfg_max_marks")
     _sec_end()
 
     # ── SECTION 2: Question Paper Structure ──
@@ -847,7 +813,7 @@ def _config():
     sec_names = [f"Section {chr(65+i)}" for i in range(cfg["num_sections"])]
     st.write(" , ".join([f"**{n}**" for n in sec_names]))
     
-    cfg["instructions"] = st.text_area("Instructions for Students", cfg["instructions"], height=100)
+    cfg["instructions"] = st.text_area("Instructions for Students", cfg["instructions"], placeholder="Enter exam instructions...", height=100)
     _sec_end()
 
     # ── SECTION 3: Question Configuration ──
@@ -865,12 +831,12 @@ def _config():
         st.markdown('<div class="cfg-sub-label">Number of Questions per Type</div>', unsafe_allow_html=True)
         q_cols = st.columns(len(cfg["question_types"]))
         for i, qt in enumerate(cfg["question_types"]):
-            cfg["counts_per_type"][qt] = q_cols[i].number_input(f"Count: {qt}", 1, 50, cfg["counts_per_type"].get(qt, 5), key=f"cfg_cnt_{qt}")
+            cfg["counts_per_type"][qt] = q_cols[i].number_input(f"Count: {qt}", 0, 50, cfg["counts_per_type"].get(qt, 0), key=f"cfg_cnt_{qt}")
             
         st.markdown('<div class="cfg-sub-label">Marks Allocation per Type</div>', unsafe_allow_html=True)
         m_cols = st.columns(len(cfg["question_types"]))
         for i, qt in enumerate(cfg["question_types"]):
-            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks: {qt}", 1, 20, cfg["marks_per_type"].get(qt, 2), key=f"cfg_mks_{qt}")
+            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks: {qt}", 0, 20, cfg["marks_per_type"].get(qt, 0), key=f"cfg_mks_{qt}")
     else:
         st.caption("Select question types above to allocate counts and marks.")
 
@@ -878,8 +844,8 @@ def _config():
     d1, d2 = st.columns(2)
     with d1:
         st.markdown('<div class="cfg-sub-label">Difficulty Level Distribution</div>', unsafe_allow_html=True)
-        diff_list = ["Mixed Difficulty", "Easy", "Medium", "Hard"]
-        diff_val = cfg.get("difficulty", "Mixed Difficulty")
+        diff_list = ["Select Difficulty", "Mixed Difficulty", "Easy", "Medium", "Hard"]
+        diff_val = cfg.get("difficulty", "Select Difficulty")
         cfg["difficulty"] = st.selectbox("Distribution Mode", diff_list, index=diff_list.index(diff_val) if diff_val in diff_list else 0)
     with d2:
         st.markdown('<div class="cfg-sub-label">Bloom\'s Taxonomy Level</div>', unsafe_allow_html=True)
@@ -891,7 +857,7 @@ def _config():
     # ── SECTION 4 & 5: Content Source & Selection ──
     _sec("Content Source & Units", "📚")
     
-    source_r = st.radio("Choose Generation Mode", ["Select Mode", "Manual Topic Entry", "File Upload"], horizontal=True)
+    source_r = st.radio("Choose Generation Mode", ["Select Mode", "Manual Topic Entry", "File Upload"], index=0, horizontal=True)
     cfg["source_mode"] = source_r # Sync to state
     
     is_file = (source_r == "File Upload")
@@ -940,7 +906,7 @@ def _config():
     st.divider()
     st.markdown('<div class="cfg-sub-label">Number of Question Paper Sets</div>', unsafe_allow_html=True)
     # 🚨 LIMIT: MAX 5 SETS 🚨
-    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 1, 5, min(cfg["num_sets"], 5), key="cfg_num_sets", help="Max 5 sets possible for unique generation.")
+    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 0, 5, min(cfg["num_sets"], 5), key="cfg_num_sets", help="Max 5 sets possible for unique generation.")
     if cfg["num_sets"] > 1:
         st.info(f"System will generate {cfg['num_sets']} different sets with consistent structure.")
     _sec_end()
@@ -1320,7 +1286,7 @@ def _faculty_alerts():
     notifs = get_notifications(user_email)
     
     st.markdown(f"""
-    <div style="background:{C.card}; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
+    <div style="background:white; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
         <h3 style="margin:0; color:{C.t1}; font-size:16px; font-weight:700;">🔔 Faculty Alerts & Notifications</h3>
         <p style="font-size:12px; color:{C.t3}; margin-top:4px;">Stay updated on your paper statuses and system announcements.</p>
     </div>
@@ -1362,7 +1328,7 @@ def _faculty_alerts():
         else:
             for n in read_notifs:
                 st.markdown(f"""
-                <div style="padding:12px 16px; background:{C.card}; border:1px solid {C.cardBd}; border-radius:8px; margin-bottom:10px; opacity:0.85;">
+                <div style="padding:12px 16px; background:white; border:1px solid #f0f0f0; border-radius:8px; margin-bottom:10px; opacity:0.75;">
                     <div style="font-size:13px; color:{C.t2};">{n['message']}</div>
                     <div style="font-size:10px; color:{C.t4}; margin-top:4px;">{n['time']}</div>
                 </div>
@@ -1386,7 +1352,7 @@ def _answers():
             cfg = p.get('cfg', {})
             # Professional Header inside Answer Key
             st.markdown(f"""
-            <div style="background:{C.card}; padding:15px; border:1px solid {C.sbBd}; border-radius:8px; margin-bottom:15px; border-left:5px solid {C.sky};">
+            <div style="background:white; padding:15px; border:1px solid {C.sbBd}; border-radius:8px; margin-bottom:15px; border-left:5px solid {C.sky};">
                 <div style="font-size:10px; font-weight:700; color:{C.t4}; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Official Answer Key</div>
                 <div style="font-size:14px; font-weight:800; color:{C.t1};">{cfg.get('exam_name', 'Examination')}</div>
                 <div style="font-size:12px; color:{C.t3}; margin-top:2px;">
@@ -1702,31 +1668,28 @@ def _settings():
                     {user_initials}
                 </div>
                 <div>
-                <div>
                     <div style="font-size:15px; font-weight:800; color:{C.t1};">Profile Settings</div>
-                    <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
+                    <div style="font-size:11px; color:{C.t3};">Note: These details are provided by the Admin and cannot be changed.</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.text_input("Full Name", value=u.get("name", ""), key="set_name")
-        st.text_input("Email Address", value=u.get("email", ""), key="set_email")
-        st.button("Update Profile", type="primary", use_container_width=True)
+        st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
+        st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
         st.markdown(f"""
-        <div class="pg-card" style="padding:22px; height:100%;">
+        <div class="pg-card" style="padding:22px;">
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
                 <div style="width:50px; height:50px; border-radius:12px; background:{C.gSkyBlue}; 
                             display:flex; align-items:center; justify-content:center; font-size:20px;">🎨</div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences & Theme</div>
-                    <div style="font-size:11px; color:{C.t3};">Customize your dashboard experience</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences</div>
+                    <div style="font-size:11px; color:{C.t3};">Customize your dashboard</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.selectbox("Appearance", ["Light Mode", "Dark Mode", "Auto (System theme)"], key="set_theme", index=2)
-        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
         st.toggle("Push Notifications", value=True, key="set_push")
         st.toggle("Auto-save Config", value=True, key="set_autosave")
+        st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
