@@ -405,7 +405,7 @@ def show_v5_faculty_dashboard():
         # Re-fetch papers for the NEW user
         st.session_state["v5_papers"] = get_user_papers(cp_email) if cp_email else []
 
-    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0)]:
+    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), ("markscheme_paper_id", None)]:
         if k not in st.session_state:
             st.session_state[k] = v
 
@@ -1148,8 +1148,15 @@ def _papers():
             
             with act_col1:
                 if status in ["Pending", "Changes Requested"]:
-                    if st.button(f"📤 Send to Admin (Set {p['set']})", key=f"send_adm_{p['id']}", use_container_width=True):
-                        st.session_state[f"show_sub_{p['id']}"] = True
+                    btn_col1, btn_col2 = st.columns([1, 1])
+                    with btn_col1:
+                        if st.button(f"📤 Send to Admin (Set {p['set']})", key=f"send_adm_{p['id']}", use_container_width=True):
+                            st.session_state[f"show_sub_{p['id']}"] = True
+                    with btn_col2:
+                        if st.button(f"📋 Marks Schema (Set {p['set']})", key=f"ms_trig_{p['id']}", use_container_width=True):
+                            st.session_state.markscheme_paper_id = p['id']
+                            st.session_state.v5_page = "markscheme"
+                            st.rerun()
                     
                     if st.session_state.get(f"show_sub_{p['id']}"):
                         with st.form(key=f"form_sub_{p['id']}"):
@@ -1387,53 +1394,59 @@ def _answers():
 # ═══════════════════════════════════════════════════════════════
 def _markscheme():
     st.markdown(f'<div style="font-size:15px;font-weight:800;color:{C.t1};margin-bottom:16px;">Marks Allocation Scheme</div>', unsafe_allow_html=True)
-    if not st.session_state.v5_papers:
-        st.info("Generate papers first.")
-        return
     
-    # ── SINGLE PAPER FILTERING logic (same as preview) ──
+    pid = st.session_state.get("markscheme_paper_id")
+    if not pid:
+        st.info("📋 Select a paper from **'My Papers'** and click **'Marks Schema'** to view allocation details.")
+        if st.button("Go to My Papers"):
+            st.session_state.v5_page = "papers"
+            st.rerun()
+        return
+
     papers_list = st.session_state.get("v5_papers", [])
-    pid = st.session_state.get("preview_paper_id")
-    if pid:
-        p = next((x for x in papers_list if x["id"] == pid),
-                 papers_list[-1] if papers_list else {})
-    else:
-        p = papers_list[-1] if papers_list else {}
+    p = next((x for x in papers_list if x["id"] == pid), None)
+    
+    if not p:
+        st.error("Selected paper not found. It may have been deleted.")
+        if st.button("Back to Papers"):
+            st.session_state.markscheme_paper_id = None
+            st.session_state.v5_page = "papers"
+            st.rerun()
+        return
 
-    if p:
-        html = f"""
-        <div class="pg-card" style="padding: 20px;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:18px; border-bottom: 2px solid {C.sbLine}; padding-bottom: 12px;">
-            <div style="font-size:14px; font-weight:800; color:{C.t1};">{p['name']}</div>
-            <div style="font-size:12px; font-weight:800; color:{C.violet}; letter-spacing: 0.5px;">TOTAL SCORE: {p['mks']} MARKS</div>
-          </div>
-          <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout: fixed;">
-            <thead>
-              <tr style="background: {C.pageBg}; text-align:left;">
-                <th style="padding:12px 8px; color:{C.t3}; width: 50px; border-radius: 8px 0 0 8px;">Q</th>
-                <th style="padding:12px 8px; color:{C.t3};">Question Prompt</th>
-                <th style="padding:12px 8px; color:{C.t3}; width: 120px;">Type [Section]</th>
-                <th style="padding:12px 8px; color:{C.t3}; width: 80px; text-align: center; border-radius: 0 8px 8px 0;">Marks</th>
-              </tr>
-            </thead>
-            <tbody>"""
+    html = f"""
+    <div class="pg-card" style="padding: 20px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:18px; border-bottom: 2px solid {C.sbLine}; padding-bottom: 12px;">
+        <div style="font-size:14px; font-weight:800; color:{C.t1};">{p['name']}</div>
+        <div style="font-size:12px; font-weight:800; color:{C.violet}; letter-spacing: 0.5px;">TOTAL SCORE: {p['mks']} MARKS</div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout: fixed;">
+        <thead>
+            <tr style="background: {C.pageBg}; text-align:left;">
+            <th style="padding:12px 8px; color:{C.t3}; width: 50px; border-radius: 8px 0 0 8px;">Q</th>
+            <th style="padding:12px 8px; color:{C.t3};">Question Prompt</th>
+            <th style="padding:12px 8px; color:{C.t3}; width: 120px;">Type [Section]</th>
+            <th style="padding:12px 8px; color:{C.t3}; width: 80px; text-align: center; border-radius: 0 8px 8px 0;">Marks</th>
+            </tr>
+        </thead>
+        <tbody>"""
             
-        # ── SORT BY MARKS ──
-        sorted_qs = sorted(p["questions"], key=lambda x: x.get("marks", 0))
+    # ── SORT BY MARKS ──
+    sorted_qs = sorted(p["questions"], key=lambda x: x.get("marks", 0))
 
-        for q in sorted_qs:
-            q_text = q['q'][:80] + "..." if len(q['q']) > 80 else q['q']
-            html += f"""
-              <tr style="border-bottom:1px solid {C.sbLine};">
-                <td style="padding:14px 8px; font-weight:700; color:{C.t1};">{q['no']}</td>
-                <td style="padding:14px 8px; color:{C.t2}; line-height: 1.4;">{q_text}</td>
-                <td style="padding:14px 8px;">
-                  <span style="background:{C.sbBd}; color:{C.violet}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:600;">{q['type']}</span>
-                </td>
-                <td style="padding:14px 8px; font-weight:800; color:{C.pink}; text-align: center; font-size: 14px;">{q['marks']}</td>
-              </tr>"""
-        html += "</tbody></table></div>"
-        st.markdown(html, unsafe_allow_html=True)
+    for q in sorted_qs:
+        q_text = q['q'][:80] + "..." if len(q['q']) > 80 else q['q']
+        html += f"""
+          <tr style="border-bottom:1px solid {C.sbLine};">
+            <td style="padding:14px 8px; font-weight:700; color:{C.t1};">{q['no']}</td>
+            <td style="padding:14px 8px; color:{C.t2}; line-height: 1.4;">{q_text}</td>
+            <td style="padding:14px 8px;">
+              <span style="background:{C.sbBd}; color:{C.violet}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:600;">{q['type']}</span>
+            </td>
+            <td style="padding:14px 8px; font-weight:800; color:{C.pink}; text-align: center; font-size: 14px;">{q['marks']}</td>
+          </tr>"""
+    html += "</tbody></table></div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
