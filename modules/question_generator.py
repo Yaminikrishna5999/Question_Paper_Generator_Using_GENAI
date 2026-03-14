@@ -250,20 +250,22 @@ Start generating now starting from 1:"""
             return None
     @staticmethod
     def clean_metadata(line_text):
-        """Removes leading Q#. and all bracketed [METADATA] patterns from the beginning of a line."""
+        """Removes leading Q#., markdown decorators, and all bracketed [METADATA] patterns."""
         # 1. Remove leading numbering (e.g., "1. ", "Q1. ", "1) ")
         cleaned = re.sub(r'^(Q?\d+[\.\:\)]\s*)', '', line_text, flags=re.I).strip()
         
-        # 2. Generic Bracket Removal: Remove any [...] at the start of the text
-        # This handles [EASY], [MCQ], [Very Short Answer] etc. without needing a keyword list.
-        while cleaned.startswith('['):
-            # Find the closing bracket that matches the first opening bracket
-            match = re.search(r'^\[.*?\]', cleaned)
-            if match:
-                cleaned = cleaned[match.end():].strip()
-            else:
-                break
-        
+        # 2. Generic Tag & Markdown Stripping Loop
+        # We loop to catch nested or sequential patterns like **[Understand][MCQ]**
+        prev_len = -1
+        while len(cleaned) != prev_len:
+            prev_len = len(cleaned)
+            # Remove markdown bold/italic wrappers at current start/end of metadata
+            cleaned = re.sub(r'^[\*_]+|[\*_]+$', '', cleaned).strip()
+            # Remove any bracketed segment at the start
+            cleaned = re.sub(r'^\[.*?\]', '', cleaned).strip()
+            # Handle broken/messy tags like Understand] (missing first bracket)
+            cleaned = re.sub(r'^[A-Z][a-z]+\]', '', cleaned).strip()
+            
         return cleaned
 
     def parse_academic_batch(self, raw, cfg):
