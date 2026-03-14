@@ -565,8 +565,7 @@ def show_v5_faculty_dashboard():
                       border:1px solid {ad};font-size:9px;font-weight:700;">{at}</div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown(f'<hr style="border:none;border-top:1px solid {C.sbBd};margin:8px 0 12px;">',
-                unsafe_allow_html=True)
+
 
     # ════════════════════════════════════════════════════════
     # PAGE ROUTER
@@ -1652,7 +1651,7 @@ def _announcements():
 # PAGE: SETTINGS
 # ═══════════════════════════════════════════════════════════════
 def _settings():
-    st.markdown(f'<div style="font-size:16px; font-weight:700; color:{C.t1}; margin-bottom:15px;">Faculty Command Center</div>', unsafe_allow_html=True)
+
     
     u = st.session_state.get("user_data", {})
     user_initials = "".join([w[0] for w in u.get("name", "F M").split()[:2]]).upper()
@@ -1710,8 +1709,6 @@ def _settings():
         st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-    
     st.markdown(f"""
     <div class="pg-card" style="padding:22px;">
         <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
