@@ -1460,7 +1460,7 @@ def _qbank():
         return
     st.markdown(f'<div style="font-size:11.5px;color:{C.t3};margin-bottom:12px;">Total: <strong>{len(all_qs)}</strong> questions</div>',
                 unsafe_allow_html=True)
-    for q in all_qs[:25]:
+    for q in all_qs:
         st.markdown(f"""
         <div class="pg-card" style="padding:10px;">
           <div style="font-size:11px;font-weight:700;color:{C.t1};margin-bottom:4px;">Q{q['no']}. {q['q']}</div>
