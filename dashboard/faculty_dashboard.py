@@ -1676,8 +1676,6 @@ def _settings():
         st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
-        
         # New Password Management Section
         st.markdown(f"""
         <div class="pg-card" style="padding:22px;">
@@ -1712,7 +1710,7 @@ def _settings():
         st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+
     
     st.markdown(f"""
     <div class="pg-card" style="padding:22px;">
