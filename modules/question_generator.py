@@ -76,6 +76,35 @@ class QuestionGenerator:
             if "quota" in s or "429" in s: return False, "quota"
             return False, f"other:{str(e)}"
     
+    def _discover_available_models(self):
+        """Fetch accessible models from API to resolve 404 errors."""
+        try:
+            available = []
+            for m in self.client.models.list():
+                # We want models that support generation
+                if 'generateContent' in m.supported_generation_methods:
+                    # Strip 'models/' prefix for consistency with our list
+                    name = m.name.replace('models/', '')
+                    available.append(name)
+            
+            if available:
+                print(f"[AI Discovery] Found {len(available)} accessible models.")
+                # Update our fallback list with discovered models
+                # Keep preference for our staples if they exist
+                new_pref = []
+                for p in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"]:
+                    if p in available: new_pref.append(p)
+                
+                # Add anything else found
+                for a in available:
+                    if a not in new_pref: new_pref.append(a)
+                
+                self.fallback_preference = new_pref
+                return True
+        except Exception as e:
+            print(f"[AI Discovery] Failed to list models: {e}")
+        return False
+
     def _get_working_model(self):
         """Return a model that hasn't been daily-exhausted"""
         if self.current_model not in self._exhausted_models:
@@ -84,13 +113,20 @@ class QuestionGenerator:
         for m in self.fallback_preference:
             if m not in self._exhausted_models:
                 if self.current_model != m:
-                    print(f"[Model Switch] Daily limit reached. Moving to {m}")
+                    print(f"[Model Switch] Moving to {m}")
                     self.current_model = m
                 return m
                 
-        # All known preferred models exhausted
+        # If all preferred failed, try one last discovery
+        if self._discover_available_models():
+             for m in self.fallback_preference:
+                 if m not in self._exhausted_models:
+                     self.current_model = m
+                     return m
+
+        # Total depletion
         self._exhausted_models.clear()
-        self.current_model = self.fallback_preference[0]
+        self.current_model = self.fallback_preference[0] if self.fallback_preference else "gemini-1.5-flash"
         return self.current_model
     
     def generate_question(self, topic, difficulty, question_type, marks=None, _retry_count=0, pdf_context=None):
@@ -128,17 +164,19 @@ class QuestionGenerator:
         except Exception as e:
             error_str = str(e).lower()
             
-            # Identify Daily vs Transient quota
+            # Identify Daily vs Transient quota vs Not Found
             is_exhausted = "429" in error_str or "resource_exhausted" in error_str
             is_daily = is_exhausted and "perday" in error_str
+            is_404 = "404" in error_str or "not_found" in error_str
             
-            if is_daily:
+            if is_daily or is_404:
+                # Mark as exhausted/unavailable and try next
                 self._exhausted_models.add(model)
                 new_model = self._get_working_model()
                 if new_model != model:
                     return self.generate_question(topic, difficulty, question_type, marks, 0, pdf_context)
             
-            # Backoff for normal errors or retries
+            # Backoff for transient rate limits or other retries
             if _retry_count < MAX_RETRIES:
                 wait = 20 if is_exhausted else 3
                 time.sleep(wait)
@@ -285,10 +323,12 @@ Start generating now starting from 1:"""
             return text
         except Exception as e:
             err_msg = str(e).lower()
-            # If batch fails due to hard limit, try fallback
+            # If batch fails due to hard limit or missing model, try fallback
             is_limit = "429" in err_msg or "quota" in err_msg
-            if (is_limit or "404" in err_msg) and _retry_count < 3:
-                if "perday" in err_msg:
+            is_404 = "404" in err_msg or "not_found" in err_msg
+            
+            if (is_limit or is_404) and _retry_count < 3:
+                if "perday" in err_msg or is_404:
                     self._exhausted_models.add(model)
                 return self.generate_batch(prompt, _retry_count + 1)
                 
