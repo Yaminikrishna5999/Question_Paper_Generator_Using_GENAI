@@ -145,21 +145,21 @@ def _get_key():
     return st.session_state.get("v5_api_key") or Config.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "").strip()
 
 def _validate_key(key):
-    """Returns (ok:bool, err_code:str)"""
+    """Returns (ok:bool, err_code:str) using modern google.genai SDK."""
     if not key:
         return False, "no_key"
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=key)
-        # Using list_models() for more robust validation (avoids 404 model not found issues)
-        models = genai.list_models()
-        next(models, None) # Trigger the API call
+        from google import genai
+        client = genai.Client(api_key=key)
+        # Probe using models list (lightweight)
+        for _ in client.models.list():
+            break
         return True, ""
     except Exception as e:
-        s = str(e)
-        if "pk" in s or "API_KEY_INVALID" in s: return False, "invalid"
-        if "quota" in s.lower(): return False, "quota"
-        return False, f"other:{s}"
+        s = str(e).lower()
+        if "invalid" in s or "401" in s or "403" in s: return False, "invalid"
+        if "quota" in s or "429" in s: return False, "quota"
+        return False, f"other:{str(e)}"
 
 # ═══════════════════════════════════════════════════════════════
 # GLOBAL CSS  — sidebar active/hover, Gold Standard palette
@@ -399,7 +399,7 @@ def show_v5_faculty_dashboard():
         # Re-fetch papers for the NEW user
         st.session_state["v5_papers"] = get_user_papers(cp_email) if cp_email else []
 
-    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), ("markscheme_paper_id", None)]:
+    for k, v in [("v5_page","dashboard"), ("v5_toast",None), ("v5_downloads", 0), ("markscheme_paper_id", None), ("v5_api_key", None)]:
         if k not in st.session_state:
             st.session_state[k] = v
 
@@ -978,6 +978,14 @@ def _run_generation(cfg):
             
             prompt = gen.build_academic_prompt(cfg, label, prev_qs=prev_qs)
             raw_response = gen.generate_batch(prompt)
+            
+            if not raw_response:
+                all_ok = False
+                # Capture specific errors from the generator
+                batch_err = gen.errors[-1] if gen.errors else "No specific error captured."
+                st.error(f"❌ Set {label}: Generation failed. Internal details: {batch_err}")
+                print(f"[FATAL] Set {label} generation failed: {batch_err}")
+                break # Stop generating other sets if one fails significantly
             
             if raw_response:
                 qs = gen.parse_academic_batch(raw_response, cfg)
