@@ -1672,9 +1672,8 @@ def _settings():
                     <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.text_input("Full Name", value=u.get("name", ""), key="set_name")
-        st.text_input("Email Address", value=u.get("email", ""), key="set_email")
-
+        st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
+        st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
