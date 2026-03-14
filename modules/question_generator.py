@@ -44,37 +44,49 @@ def generate_with_retry(client, model_name, contents, max_wait=65):
             raise e
 
 class QuestionGenerator:
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, backup_key=None):
         import google.genai as g
-        print(f"[AI SDK] Using {g.__name__} from {g.__file__}")
-        self.api_key = api_key or Config.GEMINI_API_KEY
-        self.client = genai.Client(
-            api_key=self.api_key,
-            http_options={'api_version': 'v1'}
-        )
+        from config import Config
+        self.api_key = api_key or backup_key or Config.GEMINI_API_KEY
+        self.backup_key = backup_key
+        
+        # Enhanced Key Tracing
+        if self.api_key:
+            mask = f"{self.api_key[:8]}...{self.api_key[-4:]}"
+            print(f"[AI CORE] Initializing with key: {mask}")
+            if self.backup_key and self.api_key != self.backup_key:
+                print(f"[AI CORE] Backup key detected for fallback: {self.backup_key[:8]}...")
+        else:
+            print("[AI CORE] FATAL: No API Key found in Config or Session!")
+
+        # Let the SDK handle the best API version for discovery
+        self.client = genai.Client(api_key=self.api_key)
+        
         self.generated_questions = []
         self.errors = []
-        self.current_model = "models/gemini-1.5-flash" # Current stable default
+        self.current_model = "gemini-1.5-flash"
         self._exhausted_models = set()
         
-        # Use full names with models/ prefix for absolute clarity with the SDK
-        self.fallback_preference = [f"models/{m.replace('models/', '')}" for m in Config.FALLBACK_MODELS]
+        # Use simple model IDs for generation calls (the SDK handles prefixes)
+        self.fallback_preference = [m.replace('models/', '') for m in Config.FALLBACK_MODELS]
+        
+        # PROACTIVE DISCOVERY: Find out what this key actually supports
+        self._discover_available_models()
     
     @staticmethod
     def validate_key(key):
-        """Returns (ok:bool, err_code:str)"""
-        if not key:
-            return False, "no_key"
+        """Returns (ok:bool, err_code:str) using standard probe."""
+        if not key: return False, "no_key"
         try:
             temp_client = genai.Client(api_key=key)
-            # Simple probe
-            response = temp_client.models.generate_content(
-                model="gemini-1.5-flash", 
-                contents="Reply with 'OK'"
-            )
-            if response and response.text:
+            # Fetch models list instead of trying to generate (faster, more robust)
+            avail = []
+            for m in temp_client.models.list():
+                if 'generateContent' in m.supported_generation_methods:
+                    avail.append(m.name)
+            if avail:
                 return True, ""
-            return False, "invalid"
+            return False, "no_gen_models"
         except Exception as e:
             s = str(e).lower()
             if "invalid" in s or "401" in s or "403" in s: return False, "invalid"
@@ -86,17 +98,17 @@ class QuestionGenerator:
         try:
             available = []
             for m in self.client.models.list():
-                # We want models that support generation
-                if 'generateContent' in m.supported_generation_methods:
-                    # Keep full names (e.g. models/gemini-1.5-flash)
-                    available.append(m.name)
+                # Correct attribute name in modern SDK: supported_actions
+                if m.supported_actions and 'generateContent' in m.supported_actions:
+                    # Strip 'models/' prefix for generation ID use
+                    name = m.name.replace('models/', '')
+                    available.append(name)
             
             if available:
-                print(f"[AI Discovery] Found {len(available)} accessible models.")
-                # Update our fallback list with discovered models
-                # Keep preference for our staples if they exist
+                print(f"[AI CORE] Found {len(available)} accessible models.")
+                # Prefer our staples but use what works
                 new_pref = []
-                staples = ["models/gemini-1.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-pro", "models/gemini-1.5-flash-8b"]
+                staples = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b", "gemini-flash-latest"]
                 for p in staples:
                     if p in available: new_pref.append(p)
                 
@@ -105,6 +117,13 @@ class QuestionGenerator:
                     if a not in new_pref: new_pref.append(a)
                 
                 self.fallback_preference = new_pref
+                
+                # CRITICAL: Ensure we start with a model that actually exists for this key
+                if self.current_model not in available and self.fallback_preference:
+                    old_m = self.current_model
+                    self.current_model = self.fallback_preference[0]
+                    print(f"[AI CORE] Initial model {old_m} not found. Switching to {self.current_model}")
+
                 return True
         except Exception as e:
             print(f"[AI Discovery] Failed to list models: {e}")
@@ -167,10 +186,20 @@ class QuestionGenerator:
                 return structured_question
                 
         except Exception as e:
-            error_str = str(e).lower()
+            err_msg = str(e).lower()
             
+            # KEY FALLBACK: IF AUTH FAILS (401/403/400 Invalid), TRY THE BACKUP KEY
+            is_auth_fail = any(x in err_msg for x in ["401", "403", "400", "permission_denied", "api key not valid"])
+            if is_auth_fail and self.backup_key and self.api_key != self.backup_key:
+                print(f"[AI CORE] Auth failed with primary key. Trying Backup Key...")
+                self.api_key = self.backup_key
+                self.client = genai.Client(api_key=self.api_key)
+                self._exhausted_models.clear()
+                self._discover_available_models()
+                return self.generate_question(topic, difficulty, question_type, marks, _retry_count, pdf_context)
+
             # Identify Daily vs Transient quota vs Not Found
-            is_exhausted = "429" in error_str or "resource_exhausted" in error_str
+            is_exhausted = "429" in err_msg or "resource_exhausted" in err_msg
             is_daily = is_exhausted and "perday" in error_str
             is_404 = "404" in error_str or "not_found" in error_str
             
@@ -328,6 +357,17 @@ Start generating now starting from 1:"""
             return text
         except Exception as e:
             err_msg = str(e).lower()
+            
+            # KEY FALLBACK: IF AUTH FAILS (401/403/400 Invalid), TRY THE BACKUP KEY
+            is_auth_fail = any(x in err_msg for x in ["401", "403", "400", "permission_denied", "api key not valid"])
+            if is_auth_fail and self.backup_key and self.api_key != self.backup_key:
+                print(f"[AI CORE] Auth failed in batch with primary key. Trying Backup Key...")
+                self.api_key = self.backup_key
+                self.client = genai.Client(api_key=self.api_key)
+                self._exhausted_models.clear()
+                self._discover_available_models()
+                return self.generate_batch(prompt, _retry_count)
+
             # If batch fails due to hard limit or missing model, try fallback
             is_limit = "429" in err_msg or "quota" in err_msg
             is_404 = "404" in err_msg or "not_found" in err_msg

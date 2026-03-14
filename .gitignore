@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+data/
+*.db
+C:\Users\DELL\OneDrive\Desktop\ai-question-paper-generator (2)\ai-question-paper-generator\brain\
+.gemini/

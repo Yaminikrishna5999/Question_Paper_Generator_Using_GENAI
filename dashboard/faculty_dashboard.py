@@ -150,10 +150,7 @@ def _validate_key(key):
         return False, "no_key"
     try:
         from google import genai
-        client = genai.Client(
-            api_key=key,
-            http_options={'api_version': 'v1'}
-        )
+        client = genai.Client(api_key=key)
         # Probe using models list (lightweight)
         for _ in client.models.list():
             break
@@ -955,7 +952,7 @@ def _run_generation(cfg):
         return
 
     from modules.question_generator import QuestionGenerator
-    gen = QuestionGenerator(api_key)
+    gen = QuestionGenerator(api_key, backup_key=Config.GEMINI_API_KEY)
     
     # Track generated question text to ensure NO overlap across sets
     history_for_uniqueness = "" 
@@ -1235,7 +1232,7 @@ def _preview():
     
     # ── Aggressive Cleaner Instance ──
     from modules.question_generator import QuestionGenerator
-    cleaner = QuestionGenerator()
+    cleaner = QuestionGenerator(backup_key=Config.GEMINI_API_KEY)
 
     # ── Professional Header ──
     paper_html = f"""<div style="background:white; padding:60px 80px; border:1px solid #eee; max-width:900px; margin:0 auto; color:black; box-shadow:0 0 40px rgba(0,0,0,0.05); border-radius:3px; font-family: 'Times New Roman', Times, serif; position: relative; line-height: 1.6;">

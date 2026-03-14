@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+print(">>> LOADING CONFIG FROM FOLDER (2) <<<")
 
 class Config:
     # FREE Google Gemini API Configuration

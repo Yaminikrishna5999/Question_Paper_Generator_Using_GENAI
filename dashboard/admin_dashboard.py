@@ -91,7 +91,8 @@ def _normalize_paper(p):
     }
 
 ADMIN_NAV = [
-    ("MAIN",            [("🏠", "Dashboard", "admin_dash")]),
+    ("MAIN",            [("🏠", "Dashboard", "admin_dash"),
+                         ("🔔", "Admin Alerts", "admin_alerts")]),
     ("USER MANAGEMENT", [("👨‍🏫", "Faculty Management", "fac_mgt"),
                          ("📜", "Activity Logs", "logs")]),
     ("ACADEMIC CONTROL",[("📄", "All Papers", "all_papers"),
@@ -99,8 +100,7 @@ ADMIN_NAV = [
                          ("📐", "Templates Management", "adm_templates")]),
     ("ANALYTICS",       [("📊", "System Analytics", "sys_analytics"),
                          ("📈", "Usage Statistics", "usage_stats")]),
-    ("COMMUNICATION",   [("📢", "Announcements Manager", "ann_mgt"),
-                         ("🔔", "Admin Alerts", "admin_alerts")]),
+    ("COMMUNICATION",   [("📢", "Announcements Manager", "ann_mgt")]),
     ("SYSTEM",          [("🔑", "API Usage Monitor", "api_monitor"),
                          ("⚙️", "System Settings", "sys_settings"),
                          ("🛡️", "Security Center", "security"),
@@ -235,6 +235,11 @@ def _css():
         display:flex;
         flex-direction:column;
         justify-content:space-between;
+    }}
+
+    /* ── Dropdown Hand Cursor ── */
+    div[data-baseweb="select"], div[data-baseweb="select"] *, .stSelectbox, .stSelectbox * {{
+        cursor: pointer !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -787,6 +792,8 @@ def _all_papers():
             c1, c2, c3, c4, c5 = st.columns([3, 2, 1.2, 1.8, 1])
             
             with c1:
+                # ⚓ Scroll Anchor for Alert Navigation
+                st.markdown(f"<div id='paper_{p['db_id']}'></div>", unsafe_allow_html=True)
                 st.markdown(f"""
                 <div style="display:flex; align-items:center; gap:14px; padding:4px 0;">
                     <div style="min-width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg, {C.pageBg}, #fff); 
@@ -856,7 +863,7 @@ def _all_papers():
 
                     f_col1, f_col2 = st.columns([1, 1.5])
                     with f_col1:
-                        all_statuses = ["Pending", "Submitted", "Approved", "Changes Requested"]
+                        all_statuses = ["Approved", "Changes Requested"]
                         s_idx = all_statuses.index(status) if status in all_statuses else 0
                         new_status = st.selectbox("Update Approval Status", all_statuses, index=s_idx)
                     with f_col2:
@@ -939,6 +946,16 @@ def _all_papers():
                 st.markdown(f'<div style="height:1px; background:{C.sbBd}; margin:12px 0; opacity:0.4;"></div>', unsafe_allow_html=True)
 
             st.markdown(f'<div style="height:1px; background:{C.sbBd}; margin:12px 0; opacity:0.4;"></div>', unsafe_allow_html=True)
+
+    # --- JUMP TO PAPER LOGIC ---
+    if st.session_state.get("jump_to_paper"):
+        pid = st.session_state.jump_to_paper
+        st.components.v1.html(f"""
+            <script>
+                window.parent.document.getElementById('paper_{pid}')?.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            </script>
+        """, height=0)
+        st.session_state.jump_to_paper = None
 
 def _global_qbank():
     st.markdown(f'<div class="pg-card"><h3>Global Question Repository</h3>', unsafe_allow_html=True)
@@ -1289,6 +1306,7 @@ def _admin_alerts():
                         if n.get("paper_id"):
                             st.session_state.admin_page = "all_papers"
                             st.session_state.reviewing_paper = n["paper_id"]
+                            st.session_state.jump_to_paper = n["paper_id"]
                         st.rerun()
 
     with t2:
