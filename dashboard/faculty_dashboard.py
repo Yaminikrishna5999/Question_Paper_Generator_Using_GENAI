@@ -565,7 +565,8 @@ def show_v5_faculty_dashboard():
                       border:1px solid {ad};font-size:9px;font-weight:700;">{at}</div>
         </div>""", unsafe_allow_html=True)
 
-
+    st.markdown(f'<hr style="border:none;border-top:1px solid {C.sbBd};margin:8px 0 12px;">',
+                unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════
     # PAGE ROUTER
@@ -1651,7 +1652,7 @@ def _announcements():
 # PAGE: SETTINGS
 # ═══════════════════════════════════════════════════════════════
 def _settings():
-
+    st.markdown(f'<div style="font-size:16px; font-weight:700; color:{C.t1}; margin-bottom:15px;">Faculty Command Center</div>', unsafe_allow_html=True)
     
     u = st.session_state.get("user_data", {})
     user_initials = "".join([w[0] for w in u.get("name", "F M").split()[:2]]).upper()
@@ -1667,28 +1668,30 @@ def _settings():
                     {user_initials}
                 </div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Official Identity</div>
-                    <div style="font-size:11px; color:{C.t3};">Managed by Administrator</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Profile Settings</div>
+                    <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
                 </div>
             </div>""", unsafe_allow_html=True)
         st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
         st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # New Password Management Section
+        st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+        
+        # Password Management Section
         st.markdown(f"""
         <div class="pg-card" style="padding:22px;">
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
                 <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
                             display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Security</div>
-                    <div style="font-size:11px; color:{C.t3};">Update your access credentials</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Change Password</div>
+                    <div style="font-size:11px; color:{C.t3};">Faculty controlled security</div>
                 </div>
             </div>""", unsafe_allow_html=True)
         st.text_input("Current Password", type="password", key="set_curr_pass")
         st.text_input("New Password", type="password", key="set_new_pass")
-        st.text_input("Confirm New Password", type="password", key="set_conf_pass")
+        st.text_input("Confirm Password", type="password", key="set_conf_pass")
         if st.button("Update Password", type="primary", use_container_width=True):
             st.success("Verification: Password update logic connected.")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1709,6 +1712,8 @@ def _settings():
         st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
 
+    st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+    
     st.markdown(f"""
     <div class="pg-card" style="padding:22px;">
         <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
@@ -1731,8 +1736,6 @@ def _settings():
 
     new_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...", help="Your key is only stored in your current session.")
     
-    # Bordered API Action Belt
-    st.markdown(f'<div style="border:1.5px solid {C.sbBd}; border-radius:12px; padding:15px; background:rgba(0,0,0,0.01);">', unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1])
     with c1:
         if st.button("Save & Validate Key", type="primary", use_container_width=True):
@@ -1755,7 +1758,6 @@ def _settings():
                 st.info("Manual key cleared. Reverting to system defaults.")
                 time.sleep(0.5)
                 st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
