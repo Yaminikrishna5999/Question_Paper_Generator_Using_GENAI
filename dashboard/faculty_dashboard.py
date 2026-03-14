@@ -1689,9 +1689,9 @@ def _settings():
                     <div style="font-size:11px; color:{C.t3};">Update your access credentials</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.password_input("Current Password", key="set_curr_pass")
-        st.password_input("New Password", key="set_new_pass")
-        st.password_input("Confirm New Password", key="set_conf_pass")
+        st.text_input("Current Password", type="password", key="set_curr_pass")
+        st.text_input("New Password", type="password", key="set_new_pass")
+        st.text_input("Confirm New Password", type="password", key="set_conf_pass")
         if st.button("Update Password", type="primary", use_container_width=True):
             st.success("Verification: Password update logic connected.")
         st.markdown('</div>', unsafe_allow_html=True)
