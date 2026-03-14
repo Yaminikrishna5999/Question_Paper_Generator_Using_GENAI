@@ -906,7 +906,7 @@ def _config():
     st.divider()
     st.markdown('<div class="cfg-sub-label">Number of Question Paper Sets</div>', unsafe_allow_html=True)
     # 🚨 LIMIT: MAX 5 SETS 🚨
-    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 0, 20, min(cfg["num_sets"], 20), key="cfg_num_sets", help="Generate up to 20 unique sets at once.")
+    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 0, 5, min(cfg["num_sets"], 5), key="cfg_num_sets", help="Max 5 sets possible for unique generation.")
     if cfg["num_sets"] > 1:
         st.info(f"System will generate {cfg['num_sets']} different sets with consistent structure.")
     _sec_end()
@@ -1363,11 +1363,34 @@ def _answers():
             </div>
             """, unsafe_allow_html=True)
 
-            for q in p["questions"]:
+            # ── SYNCED SORTING & SECTIONING ──
+            type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
+            sorted_qs = sorted(p["questions"], key=lambda x: type_priority.get(x.get("type"), 4))
+            
+            sections = ["A", "B", "C", "D", "E"]
+            current_type = None
+            type_idx = 0
+            q_idx = 0
+
+            for q in sorted_qs:
+                # Add Section Divider (matching Question Paper)
+                if q.get("type") != current_type:
+                    current_type = q.get("type")
+                    sec_letter = sections[type_idx] if type_idx < len(sections) else chr(65 + type_idx)
+                    header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
+                    if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
+                    
+                    st.markdown(f"""
+                    <div style="margin: 20px 0 10px 0; border-bottom: 2px solid {C.sbLine}; padding-bottom: 4px; font-size: 11px; font-weight: 900; color: {C.t4}; letter-spacing: 1px;">
+                        {header_text}
+                    </div>""", unsafe_allow_html=True)
+                    type_idx += 1
+
+                q_idx += 1
                 st.markdown(f"""
                 <div style="background:{C.pageBg};border-radius:10px;padding:12px;
                             border:1px solid {C.sbBd};border-left:4px solid {C.sky};margin-bottom:8px;">
-                  <div style="font-size:8.5px;font-weight:800;color:{C.sky};margin-bottom:4px;">Q{q['no']} · REFERENCE SOLUTION</div>
+                  <div style="font-size:8.5px;font-weight:800;color:{C.sky};margin-bottom:4px;">Q{q_idx} · REFERENCE SOLUTION</div>
                   <div style="font-size:12px;color:{C.t2};line-height:1.6;">{q['a']}</div>
                 </div>""", unsafe_allow_html=True)
 
@@ -1414,14 +1437,15 @@ def _markscheme():
         </thead>
         <tbody>"""
             
-    # ── SORT BY MARKS ──
-    sorted_qs = sorted(p["questions"], key=lambda x: x.get("marks", 0))
+    # ── SYNCED SORTING (MCQ FIRST) ──
+    type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
+    sorted_qs = sorted(p["questions"], key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
 
-    for q in sorted_qs:
+    for idx, q in enumerate(sorted_qs):
         q_text = q['q'][:80] + "..." if len(q['q']) > 80 else q['q']
         html += f"""
           <tr style="border-bottom:1px solid {C.sbLine};">
-            <td style="padding:14px 8px; font-weight:700; color:{C.t1};">{q['no']}</td>
+            <td style="padding:14px 8px; font-weight:700; color:{C.t1};">{idx + 1}</td>
             <td style="padding:14px 8px; color:{C.t2}; line-height: 1.4;">{q_text}</td>
             <td style="padding:14px 8px;">
               <span style="background:{C.sbBd}; color:{C.violet}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:600;">{q['type']}</span>
