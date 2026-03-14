@@ -1672,28 +1672,9 @@ def _settings():
                     <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
-        st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
-        
-        # Password Management Section
-        st.markdown(f"""
-        <div class="pg-card" style="padding:22px;">
-            <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
-                <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
-                            display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
-                <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Change Password</div>
-                    <div style="font-size:11px; color:{C.t3};">Faculty controlled security</div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-        st.text_input("Current Password", type="password", key="set_curr_pass")
-        st.text_input("New Password", type="password", key="set_new_pass")
-        st.text_input("Confirm Password", type="password", key="set_conf_pass")
-        if st.button("Update Password", type="primary", use_container_width=True):
-            st.success("Verification: Password update logic connected.")
+        st.text_input("Full Name", value=u.get("name", ""), key="set_name")
+        st.text_input("Email Address", value=u.get("email", ""), key="set_email")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
