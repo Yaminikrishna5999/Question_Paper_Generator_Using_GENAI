@@ -1,31 +1,46 @@
-import google.generativeai as genai
+from google import genai
 from config import Config
 import time
 import re
 
-def generate_with_retry(client, model_name, contents):
+def generate_with_retry(client, model_name, contents, max_wait=65):
     """Wrapper for handling 429 Resource Exhausted rate limitations on free tier."""
+    if not client:
+        return None
+        
     try:
-        model = genai.GenerativeModel(model_name)
-        return model.generate_content(contents)
+        return client.models.generate_content(model=model_name, contents=contents)
     except Exception as e:
         err_msg = str(e).lower()
-        if "resource_exhausted" in err_msg or "429" in err_msg:
-            print("[Rate Limit] Quota exceeded. Waiting 60 seconds before retrying...")
-            time.sleep(60)
-            return model.generate_content(contents)
+        # Handle 429 Resource Exhausted
+        if "429" in err_msg or "resource_exhausted" in err_msg:
+            if "perday" in err_msg:
+                # This is a hard limit for the day, switching models is required
+                raise e
+            
+            print(f"[Rate Limit] Hit limit on {model_name}. Waiting {max_wait}s for reset...")
+            time.sleep(max_wait)
+            # One more attempt after the wait
+            return client.models.generate_content(model=model_name, contents=contents)
         else:
             raise e
 
 class QuestionGenerator:
     def __init__(self, api_key=None):
-        # Configure FREE Gemini API
         usable_key = api_key or Config.GEMINI_API_KEY
-        genai.configure(api_key=usable_key)
+        self.client = genai.Client(api_key=usable_key)
         self.generated_questions = []
-        self.errors = []  # Track errors for UI display
-        self.current_model = Config.AI_MODEL
-        self._exhausted_models = set()  # Models whose daily quota is done
+        self.errors = []
+        self.current_model = "gemini-1.5-flash" # Current stable default
+        self._exhausted_models = set()
+        
+        # Pre-defined fallback list for stability (avoiding unknown models via API list)
+        self.fallback_preference = [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash-8b"
+        ]
     
     @staticmethod
     def validate_key(key):
@@ -33,94 +48,90 @@ class QuestionGenerator:
         if not key:
             return False, "no_key"
         try:
-            genai.configure(api_key=key)
-            # Using a simple prompt to validate the key
-            response = generate_with_retry(None, Config.AI_MODEL, "Reply with 'OK'")
-            if response.text:
+            temp_client = genai.Client(api_key=key)
+            # Simple probe
+            response = temp_client.models.generate_content(
+                model="gemini-1.5-flash", 
+                contents="Reply with 'OK'"
+            )
+            if response and response.text:
                 return True, ""
             return False, "invalid"
         except Exception as e:
             s = str(e).lower()
-            if "invalid" in s or "403" in s: return False, "invalid"
-            if "quota" in s: return False, "quota"
+            if "invalid" in s or "401" in s or "403" in s: return False, "invalid"
+            if "quota" in s or "429" in s: return False, "quota"
             return False, f"other:{str(e)}"
     
     def _get_working_model(self):
-        """Return a model that hasn't been quota-exhausted today"""
+        """Return a model that hasn't been daily-exhausted"""
         if self.current_model not in self._exhausted_models:
             return self.current_model
         
-        # Build dynamic fallback list via API (resolves 404s for keys that lack certain models)
-        dynamic_fallbacks = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        for model in dynamic_fallbacks:
-            if model not in self._exhausted_models:
-                self.current_model = model
-                print(f"[Model Switch] Switching to {model}")
-                return model
+        for m in self.fallback_preference:
+            if m not in self._exhausted_models:
+                if self.current_model != m:
+                    print(f"[Model Switch] Daily limit reached. Moving to {m}")
+                    self.current_model = m
+                return m
                 
-        # All exhausted — reset and try first one (maybe quota refreshed)
+        # All known preferred models exhausted
         self._exhausted_models.clear()
-        if dynamic_fallbacks:
-            self.current_model = dynamic_fallbacks[0]
-        else:
-            self.current_model = Config.AI_MODEL
+        self.current_model = self.fallback_preference[0]
         return self.current_model
     
     def generate_question(self, topic, difficulty, question_type, marks=None, _retry_count=0, pdf_context=None):
-        """Generate a single question using FREE Gemini API with automatic model fallback"""
+        """Generate a single question using modern SDK with professional fallback logic."""
         
-        MAX_RETRIES = 2
-        MAX_DUPLICATE_RETRIES = 2
+        # Don't spend too many retries on a single question to avoid blocking users
+        MAX_RETRIES = 2 
         
         prompt = self._build_prompt(topic, difficulty, question_type, pdf_context=pdf_context)
         model = self._get_working_model()
         
         try:
-            # Small delay to stay within free-tier rate limits
-            time.sleep(2)
+            # Small delay to keep the overall paper generation smooth
+            time.sleep(1.5)
             
-            # Generate using FREE Gemini
-            response = generate_with_retry(None, model, prompt)
+            response = generate_with_retry(self.client, model, prompt)
+            if not response or not response.text:
+                 raise ValueError("Empty response from AI")
+                 
             question_text = response.text
-            
-            # Parse and structure the question (separate question from answer)
             structured_question = self._parse_question(
                 question_text, topic, difficulty, question_type, marks
             )
             
-            # Check for duplicates (with recursion guard)
+            # Simple duplicate prevention
             if not self._is_duplicate(structured_question):
                 self.generated_questions.append(structured_question)
                 return structured_question
-            elif _retry_count < MAX_DUPLICATE_RETRIES:
+            elif _retry_count < 1: # Retry once for duplicates
                 return self.generate_question(topic, difficulty, question_type, marks, _retry_count + 1, pdf_context)
             else:
                 self.generated_questions.append(structured_question)
                 return structured_question
                 
         except Exception as e:
-            error_str = str(e)
-            error_msg = f"Error generating {question_type} on '{topic}' ({difficulty}): {e}"
-            print(error_msg)
-            self.errors.append(error_msg)
+            error_str = str(e).lower()
             
-            is_quota = '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str
-            is_daily_quota = is_quota and 'PerDay' in error_str
+            # Identify Daily vs Transient quota
+            is_exhausted = "429" in error_str or "resource_exhausted" in error_str
+            is_daily = is_exhausted and "perday" in error_str
             
-            if is_daily_quota:
-                # Daily quota exhausted — mark model and immediately try next
+            if is_daily:
                 self._exhausted_models.add(model)
-                print(f"[Quota] Daily quota exhausted for {model}, trying fallback...")
-                next_model = self._get_working_model()
-                if next_model != model:
+                new_model = self._get_working_model()
+                if new_model != model:
                     return self.generate_question(topic, difficulty, question_type, marks, 0, pdf_context)
             
-            # Retry with backoff for rate limit errors
+            # Backoff for normal errors or retries
             if _retry_count < MAX_RETRIES:
-                wait_time = 15 if is_quota else 3
-                time.sleep(wait_time)
+                wait = 20 if is_exhausted else 3
+                time.sleep(wait)
                 return self.generate_question(topic, difficulty, question_type, marks, _retry_count + 1, pdf_context)
+            
+            self.errors.append(f"AI Failure on '{topic}': {str(e)}")
             return None
     
     def build_academic_prompt(self, cfg, set_label, prev_qs=None):
@@ -235,18 +246,22 @@ Start generating now starting from 1:"""
         """Standardized batch generation with automatic model fallback."""
         model = self._get_working_model()
         try:
-            time.sleep(1)
-            response = generate_with_retry(None, model, prompt)
+            # Batch generation takes longer, so slightly more wait
+            time.sleep(2)
+            response = generate_with_retry(self.client, model, prompt)
             if not response or not response.text:
                 return None
             return response.text
         except Exception as e:
             err_msg = str(e).lower()
-            if "429" in err_msg or "quota" in err_msg or "404" in err_msg:
-                if _retry_count < 5:
+            # If batch fails due to hard limit, try fallback
+            is_limit = "429" in err_msg or "quota" in err_msg
+            if (is_limit or "404" in err_msg) and _retry_count < 3:
+                if "perday" in err_msg:
                     self._exhausted_models.add(model)
-                    return self.generate_batch(prompt, _retry_count + 1)
-            self.errors.append(f"Generation error ({model}): {str(e)}")
+                return self.generate_batch(prompt, _retry_count + 1)
+                
+            self.errors.append(f"Batch generation error ({model}): {str(e)}")
             return None
     @staticmethod
     def clean_metadata(line_text):
