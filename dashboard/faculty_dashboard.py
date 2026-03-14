@@ -1668,16 +1668,13 @@ def _settings():
                     {user_initials}
                 </div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Profile Identity</div>
-                    <div style="font-size:11px; color:{C.t3};">Manage your academic profile</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Official Identity</div>
+                    <div style="font-size:11px; color:{C.t3};">Verified faculty credentials</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        st.text_input("Full Name", value=u.get("name", ""), key="set_name")
-        c1, c2 = st.columns(2)
-        c1.text_input("Designation", value=u.get("desig", "Faculty"), key="set_desig")
-        c2.text_input("Department", value=u.get("dept", "General"), key="set_dept")
+        st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
         st.text_input("Email Address", value=u.get("email", ""), key="set_email", disabled=True)
-        st.button("Update Profile", type="primary", use_container_width=True)
+        st.markdown(f'<div style="font-size:10px; color:{C.t4}; font-style:italic;">Note: Profile details are managed by the Administrator.</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
@@ -1685,23 +1682,15 @@ def _settings():
         <div class="pg-card" style="padding:22px;">
             <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
                 <div style="width:50px; height:50px; border-radius:12px; background:{C.gSkyBlue}; 
-                            display:flex; align-items:center; justify-content:center; font-size:20px;">📊</div>
+                            display:flex; align-items:center; justify-content:center; font-size:20px;">🎨</div>
                 <div>
-                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Usage Analytics</div>
-                    <div style="font-size:11px; color:{C.t3};">Your generation performance</div>
+                    <div style="font-size:15px; font-weight:800; color:{C.t1};">Preferences</div>
+                    <div style="font-size:11px; color:{C.t3};">Customize your dashboard</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        
-        papers = st.session_state.get("v5_papers", [])
-        total_q = sum(p.get("qCnt", 0) for p in papers)
-        
-        ac1, ac2 = st.columns(2)
-        ac1.markdown(f'<div style="font-size:9px; color:{C.t4}; font-weight:700;">TOTAL PAPERS</div><div style="font-size:18px; font-weight:800; color:{C.t1};">{len(papers)}</div>', unsafe_allow_html=True)
-        ac2.markdown(f'<div style="font-size:9px; color:{C.t4}; font-weight:700;">TOTAL QUESTIONS</div><div style="font-size:18px; font-weight:800; color:{C.t1};">{total_q}</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
         st.toggle("Push Notifications", value=True, key="set_push")
         st.toggle("Auto-save Config", value=True, key="set_autosave")
+        st.toggle("Advanced Model Previews", value=False, key="set_previews")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
@@ -1728,6 +1717,7 @@ def _settings():
 
     new_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...", help="Your key is only stored in your current session.")
     
+    st.markdown(f'<div style="border:1px solid {C.sbBd}; border-radius:10px; padding:15px; background:rgba(0,0,0,0.02);">', unsafe_allow_html=True)
     c1, c2 = st.columns([1, 1])
     with c1:
         if st.button("Save & Validate Key", type="primary", use_container_width=True):
@@ -1751,49 +1741,38 @@ def _settings():
                 time.sleep(0.5)
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # 4. Security Activity Log
+    # 4. System Environment Summary
     st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
     st.markdown(f"""
-    <div class="pg-card" style="padding:22px;">
-        <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
-            <div style="width:50px; height:50px; border-radius:12px; background:#F2F4F7; 
-                        display:flex; align-items:center; justify-content:center; font-size:20px;">🛡️</div>
+    <div class="pg-card" style="padding:22px; border-left:4px solid {C.violet};">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <div style="font-size:15px; font-weight:800; color:{C.t1};">Security & Session Activity</div>
-                <div style="font-size:11px; color:{C.t3};">Monitor account security and manage active sessions</div>
+                <div style="font-size:13px; font-weight:800; color:{C.t1};">System Environment</div>
+                <div style="font-size:10px; color:{C.t4};">Current platform health and versioning</div>
             </div>
-        </div>""", unsafe_allow_html=True)
-    
-    from modules.database import get_audit_logs
-    user_email = u.get("email", "")
-    logs = get_audit_logs(user_email) if user_email else []
-    
-    if logs:
-        for log in logs[:4]:
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #F2F4F7;">
-                <div>
-                    <div style="font-size:11px; font-weight:700; color:{C.t1};">{log['action']}</div>
-                    <div style="font-size:9px; color:{C.t4};">{log['details']}</div>
-                </div>
-                <div style="font-size:9px; font-weight:600; color:{C.t3};">{log['timestamp']}</div>
+            <div style="background:#EDFAF4; color:#2DC653; padding:4px 10px; border-radius:20px; font-size:9px; font-weight:800;">
+                ● SYSTEM STABLE
             </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("No recent activity logs found.")
-        
-    st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
-    sc1, sc2, sc3 = st.columns(3)
-    if sc1.button("🧹 Clear Session Cache", use_container_width=True):
-        st.session_state.clear()
-        st.rerun()
-    if sc2.button("💾 Backup Profile", use_container_width=True):
-        st.success("Profile data exported as JSON!")
-    if sc3.button("🔧 System Diagnostics", use_container_width=True):
-        st.info("System Health: 100% (Gemini v1.5 Stable)")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        </div>
+        <div style="height:15px;"></div>
+        <div style="display:flex; gap:30px;">
+            <div>
+                <div style="font-size:9px; color:{C.t4}; font-weight:700;">AI MODEL</div>
+                <div style="font-size:11px; font-weight:700; color:{C.t2};">Gemini 1.5 Flash</div>
+            </div>
+            <div>
+                <div style="font-size:9px; color:{C.t4}; font-weight:700;">FRAMEWORK</div>
+                <div style="font-size:11px; font-weight:700; color:{C.t2};">Streamlit v1.31+</div>
+            </div>
+            <div>
+                <div style="font-size:9px; color:{C.t4}; font-weight:700;">DATABASE</div>
+                <div style="font-size:11px; font-weight:700; color:{C.t2};">SQLite (Active)</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
