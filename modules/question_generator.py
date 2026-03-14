@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from config import Config
 import time
 import re
@@ -8,8 +9,21 @@ def generate_with_retry(client, model_name, contents, max_wait=65):
     if not client:
         return None
         
+    # Permissive safety settings for academic content
+    safety_settings = [
+        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_CIVIC_INTEGRITY", threshold="BLOCK_NONE"),
+    ]
+        
     try:
-        return client.models.generate_content(model=model_name, contents=contents)
+        return client.models.generate_content(
+            model=model_name, 
+            contents=contents,
+            config=types.GenerateContentConfig(safety_settings=safety_settings)
+        )
     except Exception as e:
         err_msg = str(e).lower()
         # Handle 429 Resource Exhausted
@@ -21,7 +35,11 @@ def generate_with_retry(client, model_name, contents, max_wait=65):
             print(f"[Rate Limit] Hit limit on {model_name}. Waiting {max_wait}s for reset...")
             time.sleep(max_wait)
             # One more attempt after the wait
-            return client.models.generate_content(model=model_name, contents=contents)
+            return client.models.generate_content(
+                model=model_name, 
+                contents=contents,
+                config=types.GenerateContentConfig(safety_settings=safety_settings)
+            )
         else:
             raise e
 
@@ -249,9 +267,27 @@ Start generating now starting from 1:"""
             # Batch generation takes longer, so slightly more wait
             time.sleep(2)
             response = generate_with_retry(self.client, model, prompt)
-            if not response or not response.text:
+            
+            if not response:
+                print(f"[Error] No response object returned for model {model}")
                 return None
-            return response.text
+                
+            # Use safer text extraction from the first candidate
+            text = None
+            try:
+                text = response.text
+            except Exception as e:
+                # If .text fails, it might be due to safety filters
+                reason = "Unknown"
+                if hasattr(response, 'candidates') and response.candidates:
+                    reason = getattr(response.candidates[0], 'finish_reason', 'Unknown')
+                print(f"[Warning] Could not extract text from response. Finish Reason: {reason}")
+                
+            if not text:
+                print(f"[Warning] AI returned empty text for model {model}. Check safety filters or prompt.")
+                return None
+                
+            return text
         except Exception as e:
             err_msg = str(e).lower()
             # If batch fails due to hard limit, try fallback
