@@ -1669,7 +1669,7 @@ def _settings():
                 </div>
                 <div>
                     <div style="font-size:15px; font-weight:800; color:{C.t1};">Profile Settings</div>
-                    <div style="font-size:11px; color:{C.t3};">Manage your faculty identity</div>
+                    <div style="font-size:11px; color:{C.t3};">Note: These details are provided by the Admin and cannot be changed.</div>
                 </div>
             </div>""", unsafe_allow_html=True)
         st.text_input("Full Name", value=u.get("name", ""), key="set_name", disabled=True)
