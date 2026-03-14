@@ -67,27 +67,23 @@ class ExportHandler:
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=20)
 
-        # ── Title ──
-        pdf.set_font('Arial', 'B', 16)
+        # ── Title (Professional Layout) ──
+        pdf.set_font('Arial', 'B', 18)
         exam_name = ExportHandler._safe_pdf_text(paper.get('exam_name', 'EXAMINATION QUESTION PAPER'))
         pdf.cell(0, 10, exam_name.upper(), 0, 1, 'C')
-        pdf.ln(2)
- 
-        # ── Subject ──
-        subject = ExportHandler._safe_pdf_text(paper.get('subject', ''))
-        if subject:
-            pdf.set_font('Arial', 'B', 13)
-            pdf.cell(0, 8, f"Subject: {subject}", 0, 1, 'C')
-            pdf.ln(1)
- 
-        # ── Details ──
-        duration = ExportHandler._safe_pdf_text(paper.get('duration', ''))
-        max_marks = paper.get('max_marks', paper['total_marks'])
-        date_str = datetime.now().strftime('%d-%m-%Y')
- 
+        
+        # Course Detail
+        pdf.set_font('Arial', 'B', 14)
+        course_str = f"Course: {paper.get('course_name','')} ({paper.get('course_code','')})"
+        pdf.cell(0, 8, ExportHandler._safe_pdf_text(course_str), 0, 1, 'C')
+        
+        # Meta Details Line
         pdf.set_font('Arial', '', 10)
-        detail = f"Paper: {ExportHandler._safe_pdf_text(paper['name'])}   |   Duration: {duration}   |   Max Marks: {max_marks}   |   Date: {date_str}"
-        pdf.cell(0, 7, detail, 0, 1, 'C')
+        duration = paper.get('duration', '3 Hours')
+        max_marks = paper.get('max_marks', paper.get('total_marks', 0))
+        date_str = datetime.now().strftime('%d-%m-%Y')
+        meta_line = f"Set: {paper.get('set','A')}   |   Time: {duration}   |   Max Marks: {max_marks}   |   Date: {date_str}"
+        pdf.cell(0, 8, ExportHandler._safe_pdf_text(meta_line), 0, 1, 'C')
         pdf.ln(3)
  
         # ── Separator ──
@@ -100,11 +96,9 @@ class ExportHandler:
         pdf.cell(0, 5, f"Total Questions: {paper['total_questions']}   |   Answer all questions.", 0, 1)
         pdf.ln(5)
 
-        # ── Grouping & Sorting ──
-        # Primary: Marks Ascending (2, 5, 10...)
-        # Secondary: Type Priority
+        # ── Grouping & Sorting (MCQ FIRST) ──
         type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
-        questions = sorted(paper["questions"], key=lambda x: (int(x.get("marks", 0)), type_priority.get(x.get("type"), 4)))
+        questions = sorted(paper["questions"], key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
 
         # ── Header fields ──
         pdf.set_font('Arial', 'B', 11)
@@ -112,7 +106,7 @@ class ExportHandler:
         pdf.cell(0, 8, "Roll No: _______________________", 0, 1, 'R')
         pdf.cell(95, 8, "Student Sign: __________________", 0, 0)
         pdf.cell(0, 8, "Teacher Sign: __________________", 0, 1, 'R')
-        pdf.ln(4)
+        pdf.ln(2)
         pdf.set_draw_color(0, 0, 0)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
@@ -131,8 +125,8 @@ class ExportHandler:
                 
                 pdf.ln(8)
                 pdf.set_font('Arial', 'B', 12)
-                header_text = f"SECTION {sec_letter}: {current_type.upper().replace('MCQ', 'MCQ')}"
-                if not header_text.endswith('S'): header_text += 'S'
+                header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
+                if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
                 pdf.cell(0, 8, header_text, 0, 1, 'L')
                 pdf.ln(2)
             
@@ -190,30 +184,26 @@ class ExportHandler:
 
         doc = Document()
 
-        # ── Title ──
+        # ── Title (Professional Layout) ──
         exam_name = paper.get('exam_name', 'EXAMINATION QUESTION PAPER')
         title = doc.add_heading(exam_name.upper(), level=0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # ── Subject ──
-        subject = paper.get('subject', '')
-        if subject:
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = p.add_run(f"Subject: {subject}")
-            run.bold = True
-            run.font.size = Pt(14)
+        # Course Detail
+        cp = doc.add_paragraph()
+        cp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cr = cp.add_run(f"Course: {paper.get('course_name','')} ({paper.get('course_code','')})")
+        cr.bold = True
+        cr.font.size = Pt(14)
 
-        # ── Details ──
-        duration = paper.get('duration', '')
-        max_marks = paper.get('max_marks', paper['total_marks'])
+        # Meta Details Line
+        max_marks = paper.get('max_marks', paper.get('total_marks', 0))
         date_str = datetime.now().strftime('%d-%m-%Y')
-
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(f"Paper: {paper['name']}  |  Duration: {duration}  |  Max Marks: {max_marks}  |  Date: {date_str}")
-        run.font.size = Pt(10)
-        run.font.color.rgb = RGBColor(100, 116, 139)
+        dp = doc.add_paragraph()
+        dp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        meta_text = f"Set: {paper.get('set','A')}  |  Time: {paper.get('duration','3 Hours')}  |  Max Marks: {max_marks}  |  Date: {date_str}"
+        dr = dp.add_run(meta_text)
+        dr.font.size = Pt(11)
 
         # ── Separator ──
         doc.add_paragraph('_' * 80)
@@ -225,9 +215,9 @@ class ExportHandler:
         run.font.size = Pt(9)
         run.font.color.rgb = RGBColor(100, 116, 139)
 
-        # ── Grouping & Sorting ──
+        # ── Grouping & Sorting (MCQ FIRST) ──
         type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
-        questions = sorted(paper["questions"], key=lambda x: (int(x.get("marks", 0)), type_priority.get(x.get("type"), 4)))
+        questions = sorted(paper["questions"], key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
 
         # ── Header Fields ──
         h_table = doc.add_table(rows=2, cols=2)
@@ -259,8 +249,8 @@ class ExportHandler:
                 
                 sh = doc.add_paragraph()
                 sh.paragraph_format.space_before = Pt(18)
-                header_text = f"SECTION {sec_letter}: {current_type.upper()}"
-                if not header_text.endswith('S'): header_text += 'S'
+                header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
+                if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
                 sh_run = sh.add_run(header_text)
                 sh_run.bold = True
                 sh_run.font.size = Pt(12)
@@ -312,19 +302,16 @@ class ExportHandler:
     def _to_txt(paper):
         """User's refined text formatter with absolute safety."""
         cfg = paper.get("config", {})
-        title = paper.get('title', 'Examination').upper()
-        p_name = paper.get('name', 'Question Paper')
-        inst = paper.get('institution', paper.get('inst_name', 'University')).upper()
+        exam_name = paper.get('exam_name', paper.get('title', 'Examination')).upper()
         
-        lines = ["="*65, f"  {inst}", f"  {title} — {p_name}"]
+        lines = ["="*65, f"  {exam_name}", ""]
         
-        c_name = paper.get("course", paper.get("course_name", ""))
-        c_code = paper.get("code", paper.get("course_code", ""))
+        c_name = paper.get("course_name", "")
+        c_code = paper.get("course_code", "")
         if c_name: lines.append(f"  Course: {c_name} ({c_code})")
         
-        dept = paper.get("dept", paper.get("department", ""))
-        sem = paper.get("semester", "")
-        if dept: lines.append(f"  Dept: {dept}  |  {sem}")
+        date_str = datetime.now().strftime('%d-%m-%Y')
+        lines.append(f"  Set: {paper.get('set','A')}  |  Time: {paper.get('duration','3 Hours')}  |  Max Marks: {paper.get('max_marks', 0)}  |  Date: {date_str}")
         
         lines += [f"  Date: {paper.get('exam_date','')}  |  Duration: {paper.get('duration','')}  |  Max Marks: {paper.get('max_marks', paper.get('total_marks', 100))}",
                   "="*65]
@@ -336,9 +323,9 @@ class ExportHandler:
         lines.append(f"Student Sign: ____________    Teacher Sign: ____________")
         lines.append(f"{'═'*65}")
 
-        # ── Grouping & Sorting ──
+        # ── Grouping & Sorting (MCQ FIRST) ──
         type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
-        questions = sorted(paper.get("questions", []), key=lambda x: (int(x.get("marks", 0)), type_priority.get(x.get("type"), 4)))
+        questions = sorted(paper.get("questions", []), key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
 
         sections = ["A", "B", "C", "D", "E"]
         current_type = None
@@ -351,8 +338,8 @@ class ExportHandler:
             if q.get("type") != current_type:
                 current_type = q.get("type")
                 sec_letter = sections[type_idx] if type_idx < len(sections) else chr(65 + type_idx)
-                header_text = f"SECTION {sec_letter}: {current_type.upper()}"
-                if not header_text.endswith('S'): header_text += 'S'
+                header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
+                if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
                 lines.append(f"\n{header_text}")
                 lines.append(f"{'─'*len(header_text)}\n")
                 type_idx += 1
