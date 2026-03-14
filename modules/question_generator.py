@@ -386,6 +386,7 @@ Start generating now starting from 1:"""
                         ans = ls
 
             qtxt = "\n".join(qtxt_lines).strip() # PRESERVE NEWLINES
+            ans = ans.replace("*", "").strip() # Strip clumsy AI asterisks
             if not qtxt: continue
 
             # FINAL SAFE INDEXING
