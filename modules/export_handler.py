@@ -67,41 +67,31 @@ class ExportHandler:
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=20)
 
+        # ── Grouping & Sorting (MCQ FIRST) ──
+        type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
+        questions = sorted(paper["questions"], key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
+
         # ── Title (Professional Layout) ──
-        pdf.set_font('Arial', 'B', 18)
+        pdf.set_font('Times', 'B', 22)
         exam_name = ExportHandler._safe_pdf_text(paper.get('exam_name', 'EXAMINATION QUESTION PAPER'))
-        pdf.cell(0, 10, exam_name.upper(), 0, 1, 'C')
+        pdf.cell(0, 12, exam_name.upper(), 0, 1, 'C')
         
         # Course Detail
-        pdf.set_font('Arial', 'B', 14)
+        pdf.set_font('Times', 'B', 15)
         course_str = f"Course: {paper.get('course_name','')} ({paper.get('course_code','')})"
-        pdf.cell(0, 8, ExportHandler._safe_pdf_text(course_str), 0, 1, 'C')
+        pdf.cell(0, 10, ExportHandler._safe_pdf_text(course_str), 0, 1, 'C')
         
         # Meta Details Line
-        pdf.set_font('Arial', '', 10)
+        pdf.set_font('Times', '', 11)
         duration = paper.get('duration', '3 Hours')
         max_marks = paper.get('max_marks', paper.get('total_marks', 0))
         date_str = datetime.now().strftime('%d-%m-%Y')
         meta_line = f"Set: {paper.get('set','A')}   |   Time: {duration}   |   Max Marks: {max_marks}   |   Date: {date_str}"
         pdf.cell(0, 8, ExportHandler._safe_pdf_text(meta_line), 0, 1, 'C')
-        pdf.ln(3)
- 
-        # ── Separator ──
-        pdf.set_draw_color(100, 100, 100)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(4)
- 
-        # ── Instructions ──
-        pdf.set_font('Arial', 'I', 9)
-        pdf.cell(0, 5, f"Total Questions: {paper['total_questions']}   |   Answer all questions.", 0, 1)
-        pdf.ln(5)
 
-        # ── Grouping & Sorting (MCQ FIRST) ──
-        type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
-        questions = sorted(paper["questions"], key=lambda x: (type_priority.get(x.get("type"), 4), x.get("no", 0)))
-
-        # ── Header fields ──
-        pdf.set_font('Arial', 'B', 11)
+        # ── Student Header ──
+        pdf.set_font('Times', 'B', 11)
         pdf.cell(95, 8, "Name: __________________________", 0, 0)
         pdf.cell(0, 8, "Roll No: _______________________", 0, 1, 'R')
         pdf.cell(95, 8, "Student Sign: __________________", 0, 0)
@@ -109,7 +99,16 @@ class ExportHandler:
         pdf.ln(2)
         pdf.set_draw_color(0, 0, 0)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
+        pdf.ln(6)
+
+        # ── Instructions Box (Professional) ──
+        instr = paper.get('config', {}).get('instructions', '1. Answer all questions.\n2. Figures to the right indicate full marks.')
+        pdf.set_fill_color(250, 250, 250)
+        pdf.set_font('Times', 'B', 10)
+        pdf.cell(0, 7, "GENERAL INSTRUCTIONS:", 1, 1, 'L', True)
+        pdf.set_font('Times', '', 10)
+        pdf.multi_cell(0, 6, ExportHandler._safe_pdf_text(instr), 1, 'L')
+        pdf.ln(8)
 
         # ── Render Sections and Questions ──
         sections = ["A", "B", "C", "D", "E"]
@@ -123,41 +122,40 @@ class ExportHandler:
                 current_type = q.get("type")
                 sec_letter = sections[type_idx] if type_idx < len(sections) else chr(65 + type_idx)
                 
-                pdf.ln(8)
-                pdf.set_font('Arial', 'B', 12)
+                pdf.ln(10)
+                pdf.set_font('Times', 'B', 14)
                 header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
                 if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
                 pdf.cell(0, 8, header_text, 0, 1, 'L')
-                pdf.ln(2)
+                pdf.ln(4)
+                type_idx += 1
             
             q_count += 1
             
-            # Use safe flow logic: write the number, then content, then marks.
-            pdf.set_font('Arial', 'B', 10)
+            # Question and Marks line
+            pdf.set_font('Times', 'B', 11)
             pdf.write(6, f"{q_count}. ")
             
-            pdf.set_font('Arial', '', 10)
-            raw_content = q.get('q', q.get('content', ''))
-            content = ExportHandler._clean_text(raw_content)
+            pdf.set_font('Times', '', 11)
+            content = ExportHandler._clean_text(q.get('q', q.get('content', '')))
             content = ExportHandler._safe_pdf_text(content)
             pdf.write(6, content)
             
-            # Print Marks
-            pdf.set_font('Arial', 'B', 9)
+            pdf.set_font('Times', 'B', 11)
             pdf.cell(0, 6, f" [{q['marks']} Marks]", 0, 1, 'R')
             
             # ── MCQ Options ──
             opts = q.get('options', [])
             if q.get("type") == "MCQ" and opts and isinstance(opts, list):
-                pdf.ln(1)
-                pdf.set_font('Arial', '', 9.5)
+                pdf.ln(2)
+                pdf.set_font('Times', '', 10)
                 prefixes = ['a)', 'b)', 'c)', 'd)']
                 for i, opt in enumerate(opts[:4]):
-                    pdf.set_x(22) # Professional indent
+                    pdf.set_x(25)
                     opt_txt = ExportHandler._safe_pdf_text(str(opt))
-                    pdf.cell(0, 5, f"{prefixes[i]} {opt_txt}", 0, 1)
+                    pdf.cell(0, 6, f"{prefixes[i]} {opt_txt}", 0, 1)
             
-            pdf.ln(4)
+            pdf.ln(8)
 
         # ── End ──
         pdf.ln(5)
@@ -184,17 +182,25 @@ class ExportHandler:
 
         doc = Document()
 
+        # ── Global Typography (Academic) ──
+        style = doc.styles['Normal']
+        style.font.name = 'Times New Roman'
+        style.font.size = Pt(11)
+
         # ── Title (Professional Layout) ──
-        exam_name = paper.get('exam_name', 'EXAMINATION QUESTION PAPER')
-        title = doc.add_heading(exam_name.upper(), level=0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        exam_name = paper.get('exam_name', paper.get('title', 'EXAMINATION')).upper()
+        tp = doc.add_paragraph()
+        tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        tr = tp.add_run(exam_name)
+        tr.bold = True
+        tr.font.size = Pt(22)
 
         # Course Detail
         cp = doc.add_paragraph()
         cp.alignment = WD_ALIGN_PARAGRAPH.CENTER
         cr = cp.add_run(f"Course: {paper.get('course_name','')} ({paper.get('course_code','')})")
         cr.bold = True
-        cr.font.size = Pt(14)
+        cr.font.size = Pt(16)
 
         # Meta Details Line
         max_marks = paper.get('max_marks', paper.get('total_marks', 0))
@@ -205,15 +211,27 @@ class ExportHandler:
         dr = dp.add_run(meta_text)
         dr.font.size = Pt(11)
 
-        # ── Separator ──
-        doc.add_paragraph('_' * 80)
+        doc.add_paragraph('_' * 80).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # ── Instructions ──
-        p = doc.add_paragraph()
-        run = p.add_run(f"Total Questions: {paper['total_questions']}  |  Answer all questions.")
-        run.italic = True
-        run.font.size = Pt(9)
-        run.font.color.rgb = RGBColor(100, 116, 139)
+        # ── Instructions Box (Professional) ──
+        instr = paper.get('config', {}).get('instructions', '1. Answer all questions.\n2. Figures to the right indicate full marks.')
+        inst_table = doc.add_table(rows=1, cols=1)
+        inst_table.style = 'Table Grid'
+        cell = inst_table.rows[0].cells[0]
+        
+        # Heading
+        iph = cell.paragraphs[0]
+        ipr = iph.add_run("GENERAL INSTRUCTIONS:")
+        ipr.bold = True
+        ipr.font.size = Pt(10)
+        
+        # Content
+        ipc = cell.add_paragraph(instr)
+        ipc.paragraph_format.space_before = Pt(4)
+        if ipc.runs:
+            ipc.runs[0].font.size = Pt(10)
+        
+        doc.add_paragraph() # Spacer
 
         # ── Grouping & Sorting (MCQ FIRST) ──
         type_priority = {"MCQ": 0, "Fill in the Blanks": 1, "Short Answer": 2, "Long Answer": 3}
@@ -304,20 +322,28 @@ class ExportHandler:
         cfg = paper.get("config", {})
         exam_name = paper.get('exam_name', paper.get('title', 'Examination')).upper()
         
-        lines = ["="*65, f"  {exam_name}", ""]
+        lines = []
+        lines.append("="*65)
+        lines.append(f"{exam_name:^65}")
         
         c_name = paper.get("course_name", "")
         c_code = paper.get("course_code", "")
-        if c_name: lines.append(f"  Course: {c_name} ({c_code})")
+        if c_name:
+            lines.append(f"Course: {c_name} ({c_code})".center(65))
         
+        duration = paper.get('duration', '3 Hours')
+        max_marks = paper.get('max_marks', paper.get('total_marks', 0))
         date_str = datetime.now().strftime('%d-%m-%Y')
-        lines.append(f"  Set: {paper.get('set','A')}  |  Time: {paper.get('duration','3 Hours')}  |  Max Marks: {paper.get('max_marks', 0)}  |  Date: {date_str}")
+        meta_text = f"Set: {paper.get('set','A')}  |  Time: {duration}  |  Max Marks: {max_marks}  |  Date: {date_str}"
+        lines.append(meta_text.center(65))
+        lines.append("="*65)
         
-        lines += [f"  Date: {paper.get('exam_date','')}  |  Duration: {paper.get('duration','')}  |  Max Marks: {paper.get('max_marks', paper.get('total_marks', 100))}",
-                  "="*65]
-        
-        if cfg.get("instructions"):
-            lines += ["",f"INSTRUCTIONS:\n{cfg['instructions']}",""]
+        # General Instructions
+        instr = cfg.get('instructions', '1. Answer all questions.\n2. Figures to the right indicate full marks.')
+        lines.append("\nGENERAL INSTRUCTIONS:")
+        lines.append("-" * 21)
+        lines.append(instr)
+        lines.append("\n" + "_"*65 + "\n")
         
         lines.append(f"Name: ____________________    Roll No: ________________")
         lines.append(f"Student Sign: ____________    Teacher Sign: ____________")
