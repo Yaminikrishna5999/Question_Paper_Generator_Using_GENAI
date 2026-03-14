@@ -906,7 +906,7 @@ def _config():
     st.divider()
     st.markdown('<div class="cfg-sub-label">Number of Question Paper Sets</div>', unsafe_allow_html=True)
     # 🚨 LIMIT: MAX 5 SETS 🚨
-    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 0, 5, min(cfg["num_sets"], 5), key="cfg_num_sets", help="Max 5 sets possible for unique generation.")
+    cfg["num_sets"] = st.number_input("How many sets? (Set A, B, C...)", 0, 20, min(cfg["num_sets"], 20), key="cfg_num_sets", help="Generate up to 20 unique sets at once.")
     if cfg["num_sets"] > 1:
         st.info(f"System will generate {cfg['num_sets']} different sets with consistent structure.")
     _sec_end()

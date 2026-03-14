@@ -162,7 +162,7 @@ The distribution must be precisely: {type_reqs}.
 </SOURCE_TEXT>
 
 STRICT REQUIREMENTS:
-1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
+1. NO INTRODUCTORY TEXT: Start directly with "1. [Question Text]".
 2. ZERO OUTSIDE KNOWLEDGE: All questions and answers MUST be derived EXCLUSIVELY from the provided <SOURCE_TEXT>.
 3. CONCISE QUESTIONS: Question length MUST be independent of marks. For 10-mark questions, the text MUST be concise (max 2-3 sentences or 3-4 lines). Do NOT generate 10 lines of text just because it is worth 10 marks.
 4. STUDENT CLARITY: Use simple, direct language. The goal of the question must be immediately obvious.
@@ -182,7 +182,7 @@ PAPER STRUCTURE:
 - MARKS: {marks_ln}
 
 FORMAT:
-1. [DIFFICULTY][TYPE] Question text?
+1. [Question Text]
 a) Option 1
 b) Option 2
 c) Option 3
@@ -208,7 +208,7 @@ EXAM: {exam_name} | {course} | {semester} | Set {set_label}
 {prev_note}
 
 STRICT REQUIREMENTS:
-1. NO INTRODUCTORY TEXT: Start directly with "1. [Difficulty][Type] Question".
+1. NO INTRODUCTORY TEXT: Start directly with "1. [Question Text]".
 2. ZERO OUTSIDE KNOWLEDGE: Base questions ONLY on the provided Topics/Context. Do not use general knowledge outside these subjects.
 3. CONCISE QUESTIONS: Regardless of marks, keep the question text brief and focused. Even for 10-mark questions, the text MUST be concise (max 2-3 sentences or 3-4 lines). Do NOT generate 10 lines of text just because it is worth 10 marks.
 4. STUDENT CLARITY: Phrase questions simply and directly so they are easy for students to understand.
@@ -221,7 +221,7 @@ STRICT REQUIREMENTS:
 11. COMPLETE DISTRIBUTION: You MUST generate questions for EVERY type listed in the distribution. Do not skip any type (e.g., if Short Answer is requested, it MUST be generated).
 
 FORMAT:
-1. [DIFFICULTY][TYPE] Question text?
+1. [Question Text]
 a) Option 1
 b) Option 2
 c) Option 3
@@ -263,6 +263,8 @@ Start generating now starting from 1:"""
             cleaned = re.sub(r'^[\*_]+|[\*_]+$', '', cleaned).strip()
             # Remove any bracketed segment at the start
             cleaned = re.sub(r'^\[.*?\]', '', cleaned).strip()
+            # Remove "Medium MCQ:", "Easy Short Answer:", etc. prefixes
+            cleaned = re.sub(r'^(Easy|Medium|Hard|MCQ|Short Answer|Long Answer|Very Short Answer|Fill in the Blanks|Descriptive Questions)[\s\:]*', '', cleaned, flags=re.I).strip()
             # Handle broken/messy tags like Understand] (missing first bracket)
             cleaned = re.sub(r'^[A-Z][a-z]+\]', '', cleaned).strip()
             
