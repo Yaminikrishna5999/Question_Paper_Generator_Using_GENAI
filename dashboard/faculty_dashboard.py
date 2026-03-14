@@ -56,12 +56,7 @@ class C:
 # ═══════════════════════════════════════════════════════════════
 # STATIC DATA  (UI/display only — NOT used for question generation)
 # ═══════════════════════════════════════════════════════════════
-SEED_TEMPLATES = [
-    {"id":1,"name":"Standard Mid-Sem",    "desc":"20 questions, 3 hrs, mixed types","q":20,"m":100,"diff":"Balanced",  "uses":12},
-    {"id":2,"name":"MCQ Only Quiz",        "desc":"30 MCQs, 1 hr, fully objective",  "q":30,"m":60, "diff":"Accessible","uses":8},
-    {"id":3,"name":"End-Sem Comprehensive","desc":"25 questions, 3 hrs, all types",  "q":25,"m":100,"diff":"Rigorous",  "uses":6},
-    {"id":4,"name":"Lab Viva Pattern",     "desc":"15 short, 5 long, practical focus","q":20,"m":50,"diff":"Balanced",  "uses":4},
-]
+
 
 SEED_ANNOUNCEMENTS = [
     {"id":1,"title":"System Maintenance",    "body":"PaperGen AI will undergo maintenance on Sunday 2–4 AM. Please save your work.","type":"warning","time":"Today 9:00 AM"},
@@ -121,8 +116,7 @@ FACULTY_NAV = [
                   ("🖨️","Exam Preview",  "preview"),
                   ("🔑","Answer Keys",   "answers"),
                   ("📋","Marks Scheme",  "markscheme"),
-                  ("🗂️","Question Bank","qbank"),
-                  ("📐","Templates",     "templates")]),
+                  ("🗂️","Question Bank","qbank")]),
     ("REPORTS",  [("📊","Statistics",    "statistics"),
                   ("📥","Downloads",     "downloads"),
                   ("📢","Announcements", "announcements_page")]),
@@ -409,8 +403,7 @@ def show_v5_faculty_dashboard():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    if "v5_templates" not in st.session_state:
-        st.session_state["v5_templates"] = SEED_TEMPLATES.copy()
+
     if "v5_config" not in st.session_state:
         st.session_state.v5_config = {
             # Section 1: Identity
@@ -452,8 +445,7 @@ def show_v5_faculty_dashboard():
             "num_sets": 1
         }
     
-    if "v5_templates" not in st.session_state:
-        st.session_state.v5_templates = SEED_TEMPLATES.copy()
+
 
     _css()
 
@@ -589,7 +581,6 @@ def show_v5_faculty_dashboard():
     elif pg == "answers":            _answers()
     elif pg == "markscheme":         _markscheme()
     elif pg == "qbank":              _qbank()
-    elif pg == "templates":          _templates()
     elif pg == "statistics":         _statistics()
     elif pg == "downloads":          _downloads()
     elif pg == "announcements_page": _announcements()
@@ -737,14 +728,6 @@ def _config():
         st.markdown(f'<div style="font-size:11px;color:{C.t4}; margin-bottom:20px;">Faculty Dashboard • Academic Year: {cfg["academic_year"]}</div>', unsafe_allow_html=True)
     with hc2:
         st.markdown('<div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">', unsafe_allow_html=True)
-        if st.button("💾 Save Template", use_container_width=False):
-            t_id = len(st.session_state.v5_templates) + 1
-            st.session_state.v5_templates.append({
-                "id": t_id, "name": f"Template {t_id}: {cfg['exam_name']}",
-                "desc": f"{cfg['course_name']} - {cfg['exam_type']}", "q": cfg['total_questions'],
-                "m": cfg['max_marks'], "diff": cfg['difficulty'], "uses": 0, "cfg": cfg.copy()
-            })
-            st.success("Template saved!")
         if st.button("✨ Reset", use_container_width=False):
             st.session_state.v5_config = {
                 "exam_name": "Mid Term Examination",
@@ -1475,59 +1458,7 @@ def _qbank():
 # ═══════════════════════════════════════════════════════════════
 # PAGE: TEMPLATES
 # ═══════════════════════════════════════════════════════════════
-def _templates():
-    st.markdown(f'<div style="font-size:15px;font-weight:800;color:{C.t1};margin-bottom:16px;">Saved Exam Templates & Patterns</div>', unsafe_allow_html=True)
-    
-    templates = st.session_state.get("v5_templates", SEED_TEMPLATES)
-    if not templates:
-        st.info("No templates saved yet.")
-        return
 
-    cols = st.columns(2)
-    grads = [C.gPink, C.gSkyBlue, C.gViolet, C.gOrange]
-    
-    for i, t in enumerate(templates):
-        with cols[i % 2]:
-            st.markdown(f"""
-            <div class="pg-card">
-              <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                <div style="width:36px;height:36px;background:{grads[i%4]};border-radius:9px;
-                            display:flex;align-items:center;justify-content:center;font-size:16px;">📐</div>
-                <span style="background:{C.pageBg};color:{C.t3};padding:2px 7px;border-radius:7px;
-                             font-size:8.5px;font-weight:700;border:1px solid {C.sbBd};
-                             height:fit-content;">{t.get('uses',0)} uses</span>
-              </div>
-              <div style="font-size:12px;font-weight:800;color:{C.t1};margin-bottom:2px;">{t['name']}</div>
-              <div style="font-size:9.5px;color:{C.t4};margin-bottom:10px;line-height:1.5;">{t['desc']}</div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
-                <div style="text-align:center;">
-                  <div style="font-size:12.5px;font-weight:800;">{t['q']}</div>
-                  <div style="font-size:7.5px;color:{C.t4};">Questions</div>
-                </div>
-                <div style="text-align:center;">
-                  <div style="font-size:12.5px;font-weight:800;">{t['m']}</div>
-                  <div style="font-size:7.5px;color:{C.t4};">Marks</div>
-                </div>
-                <div style="text-align:center;">
-                  <div style="font-size:9px;font-weight:800;color:{C.sky};">{t['diff']}</div>
-                  <div style="font-size:7.5px;color:{C.t4};">Mode</div>
-                </div>
-              </div>""", unsafe_allow_html=True)
-            
-            if st.button(f"Apply Blueprint {t['id']}", key=f"tpl_apply_{t['id']}", use_container_width=True):
-                # If template has a stored cfg, use it
-                if "cfg" in t:
-                    st.session_state.v5_config = t["cfg"].copy()
-                else:
-                    st.session_state.v5_config["total_questions"] = t["q"]
-                    st.session_state.v5_config["max_marks"] = t["m"]
-                    st.session_state.v5_config["difficulty"] = t["diff"]
-                
-                st.success(f"'{t['name']}' applied successfully!")
-                time.sleep(0.5)
-                st.session_state.v5_page = "configuration"
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
