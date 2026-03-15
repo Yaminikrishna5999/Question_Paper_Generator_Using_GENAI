@@ -15,6 +15,7 @@ from modules.database import (
     get_notifications, mark_notification_read, add_notification,
     submit_paper, delete_announcement
 )
+from modules.auth.env_utils import update_env_key
 
 # ── Load .env (already handled by Config, but kept for safety) ──
 try:
@@ -142,23 +143,40 @@ def _track_dl(dtype, pname, db_id=None):
 
 def _get_key():
     # Priority: Session State (Manual Entry) > Config (.env) > OS Env
-    return st.session_state.get("v5_api_key") or Config.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "").strip()
+    key = st.session_state.get("v5_api_key") or Config.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
+    return key.strip() if isinstance(key, str) else key
 
 def _validate_key(key):
     """Returns (ok:bool, err_code:str) using modern google.genai SDK."""
-    if not key:
+    if not key or not isinstance(key, str) or not key.strip():
         return False, "no_key"
+    key = key.strip()
     try:
         from google import genai
         client = genai.Client(api_key=key)
-        # Probe using models list (lightweight)
-        for _ in client.models.list():
-            break
+        
+        # 1. First, list models to see what this key can actually access
+        available_models = []
+        for m in client.models.list():
+            if m.supported_actions and 'generateContent' in m.supported_actions:
+                available_models.append(m.name)
+        
+        if not available_models:
+            return False, "no_gen_models"
+            
+        # 2. Probe using the first available model (e.g., gemini-2.0-flash or gemini-1.5-flash)
+        # We use the full name from the list (usually 'models/...')
+        client.models.generate_content(
+            model=available_models[0],
+            contents="Say 'ok'"
+        )
         return True, ""
     except Exception as e:
         s = str(e).lower()
-        if "invalid" in s or "401" in s or "403" in s: return False, "invalid"
+        if "invalid" in s or "401" in s or "403" in s or "not valid" in s: return False, "invalid"
         if "quota" in s or "429" in s: return False, "quota"
+        # 404 check for transparency
+        if "not found" in s or "404" in s: return False, f"model_not_found:{available_models[0] if 'available_models' in locals() and available_models else 'none'}"
         return False, f"other:{str(e)}"
 
 # ═══════════════════════════════════════════════════════════════
@@ -443,8 +461,9 @@ def show_v5_faculty_dashboard():
             
             # Section 3: Question Config
             "question_types": [],
-            "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
-            "counts_per_type": {"MCQ": 0, "Short Answer": 0},
+            "marks_per_type": {},
+            "weightage_per_type": {},
+            "counts_per_type": {},
             "difficulty": "Select Difficulty",
             "bloom": [],
             
@@ -564,6 +583,8 @@ def show_v5_faculty_dashboard():
                 else:
                     if st.button(f"{icon}  {label}", key=f"nav_{page_id}", use_container_width=True):
                         if not active:
+                            if page_id == "markscheme":
+                                st.session_state.markscheme_paper_id = None
                             st.session_state.v5_page = page_id
                             st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -792,12 +813,13 @@ def _config():
                 "exam_type": "Select Type",
                 "exam_date": datetime.now().date(),
                 "duration": "Select Duration",
-                "max_marks": 0,
+                "max_marks": "",
                 "total_questions": 0,
                 "num_sections": 0,
                 "instructions": "",
                 "question_types": [],
-                "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
+                "marks_per_type": {},
+                "weightage_per_type": {},
                 "counts_per_type": {},
                 "difficulty": "Select Difficulty",
                 "bloom": [],
@@ -846,7 +868,7 @@ def _config():
     dur_list = ["Select Duration", "1 Hour", "2 Hours", "3 Hours", "1.5 Hours", "2.5 Hours"]
     dur_val = cfg.get("duration", "Select Duration")
     cfg["duration"] = r4c2.selectbox("Exam Duration", dur_list, index=dur_list.index(dur_val) if dur_val in dur_list else 0)
-    cfg["max_marks"] = r4c3.number_input("Maximum Marks", 0, 100, cfg["max_marks"], key="cfg_max_marks")
+    cfg["max_marks"] = r4c3.text_input("Maximum Marks", value=str(cfg.get("max_marks", "")), placeholder="e.g. 50, 100")
     _sec_end()
 
     # ── SECTION 2: Question Paper Structure ──
@@ -877,18 +899,42 @@ def _config():
     
     st.divider()
     if cfg["question_types"]:
-        # Initialize counts if missing
+        # Initialize counts and marks if missing
         if "counts_per_type" not in cfg: cfg["counts_per_type"] = {}
+        if "marks_per_type" not in cfg: cfg["marks_per_type"] = {}
+        if "weightage_per_type" not in cfg: cfg["weightage_per_type"] = {}
         
-        st.markdown('<div class="cfg-sub-label">Number of Questions per Type</div>', unsafe_allow_html=True)
-        q_cols = st.columns(len(cfg["question_types"]))
+        st.markdown('<div class="cfg-sub-label">Question Distribution & Marks</div>', unsafe_allow_html=True)
+        # We'll use a clean layout: Qty x Marks per Q = Section Total
         for i, qt in enumerate(cfg["question_types"]):
-            cfg["counts_per_type"][qt] = q_cols[i].number_input(f"Count: {qt}", 0, 50, cfg["counts_per_type"].get(qt, 0), key=f"cfg_cnt_{qt}")
-            
-        st.markdown('<div class="cfg-sub-label">Marks Allocation per Type</div>', unsafe_allow_html=True)
-        m_cols = st.columns(len(cfg["question_types"]))
-        for i, qt in enumerate(cfg["question_types"]):
-            cfg["marks_per_type"][qt] = m_cols[i].number_input(f"Marks: {qt}", 0, 20, cfg["marks_per_type"].get(qt, 0), key=f"cfg_mks_{qt}")
+            col1, col2, col3 = st.columns([1, 1, 1.2])
+            with col1:
+                cfg["counts_per_type"][qt] = st.number_input(f"Qty: {qt}", 0, 50, cfg["counts_per_type"].get(qt, 0), key=f"cfg_cnt_{qt}")
+            with col2:
+                # Marks per Question (Weightage)
+                cfg["weightage_per_type"][qt] = st.number_input(f"Marks Each: {qt}", 0, 50, cfg["weightage_per_type"].get(qt, 1), key=f"cfg_wgt_{qt}")
+            with col3:
+                # Auto-calculate and display Section Total
+                section_total = cfg["counts_per_type"][qt] * cfg["weightage_per_type"][qt]
+                cfg["marks_per_type"][qt] = section_total
+                st.markdown(f'<div style="padding-top:35px; font-weight:700; color:{C.t2};">Total: {section_total} Points</div>', unsafe_allow_html=True)
+        
+        # Calculate Total Marks Allocated (Sum of all section totals)
+        total_mks_calc = sum(cfg["marks_per_type"].values())
+        
+        # Live Tally Display
+        try:
+            max_m = int(cfg.get("max_marks", 0)) if str(cfg.get("max_marks", "")).isnumeric() else 0
+        except:
+            max_m = 0
+        color = C.green if total_mks_calc == max_m and max_m > 0 else C.pink
+        status_ico = "✅" if total_mks_calc == max_m else "⚠️"
+        st.markdown(f"""
+        <div style="background:{C.pageBg}; border:1px solid {C.sbBd}; border-radius:10px; padding:12px 18px; margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-size:12px; font-weight:700; color:{C.t1};">Total Marks Allocated:</div>
+            <div style="font-size:16px; font-weight:800; color:{color};">{status_ico} {total_mks_calc} / {max_m}</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
         st.caption("Select question types above to allocate counts and marks.")
 
@@ -973,13 +1019,32 @@ def _config():
 
 def _run_generation(cfg):
     """Execution logic for multi-set generation with uniqueness."""
-    api_key = _get_key()
-    if not api_key:
-        st.error("API Key missing! Please check your settings.")
+    # ── 🚨 PRIORITY 1: Marks Consistency Validation 🚨 ──
+    qtypes = cfg.get("question_types", [])
+    counts = cfg.get("counts_per_type", {})
+    marks_totals = cfg.get("marks_per_type", {})
+    
+    total_allocated = sum(marks_totals.get(qt, 0) for qt in qtypes)
+    
+    # Also check that Qty > 0 for all selected types
+    for qt in qtypes:
+        if counts.get(qt, 0) <= 0 and marks_totals.get(qt, 0) > 0:
+            st.error(f"❌ **Missing Quantity**: You allocated {marks_totals.get(qt)} marks to {qt}, but the quantity is 0. Please enter how many questions to generate.")
+            return
+            
+    try:
+        max_marks = int(cfg.get("max_marks", 0))
+    except (ValueError, TypeError):
+        st.error("❌ **Invalid Maximum Marks**: Please enter a valid number for Maximum Marks.")
+        return
+        
+    if total_allocated != max_marks:
+        err_msg = f"Marks Mismatch: Total allocated ({total_allocated}) does not match Maximum Marks ({max_marks})."
+        st.error(f"❌ **{err_msg}**\nPlease adjust your Question Configuration.")
+        st.toast(err_msg, icon="🛑")
         return
 
-    # 🚨 STRICT VALIDATION 🚨
-    qtypes = cfg.get("question_types", [])
+    # ── 🚨 PRIORITY 2: Structure & Source Validation 🚨 ──
     num_sections = cfg.get("num_sections", 0)
     source_mode = cfg.get("source_mode")
 
@@ -1001,6 +1066,11 @@ def _run_generation(cfg):
     
     if source_mode == "File Upload" and not cfg.get("file_content"):
         st.error("File upload mode active but no file content detected. Please upload a file.")
+        return
+
+    api_key = _get_key()
+    if not api_key:
+        st.error("API Key missing! Please check your settings.")
         return
 
     from modules.question_generator import QuestionGenerator
@@ -1089,9 +1159,10 @@ def _run_generation(cfg):
             "course_name": "", "course_code": "", "academic_year": "Select Year",
             "semester": "Select Semester", "exam_type": "Select Type",
             "exam_date": datetime.now().date(), "duration": "Select Duration",
-            "max_marks": 0, "total_questions": 0, "num_sections": 0, "instructions": "",
+            "max_marks": "", "total_questions": 0, "num_sections": 0, "instructions": "",
             "question_types": [],
-            "marks_per_type": {"MCQ": 0, "Short Answer": 0, "Long Answer": 0},
+            "marks_per_type": {},
+            "weightage_per_type": {},
             "counts_per_type": {}, "difficulty": "Select Difficulty", "bloom": [],
             "source_mode": "Select Mode", "topics": [], "file_content": None,
             "units": [], "unit_dist": {}, "randomize": True,
@@ -1103,7 +1174,9 @@ def _run_generation(cfg):
         st.session_state.v5_page = "papers"
         st.rerun()
     else:
-        status_msg.error("Generation failed. Please check the errors above and fix your configuration or API key.")
+        status_msg.error("Generation failed. Please check the errors above.")
+        st.warning("⚠️ **Common Fixes:**\n1. Check your **Settings** tab to ensure the API key is valid.\n2. Verify you have internet access.\n3. Ensure your marks allocation matches the Maximum Marks.")
+        st.info("If the error mentions 'API key not valid', please update your key in the **Settings** tab and click 'Save & Validate'.")
 
 def _papers():
     """Display generated papers with Section 9 Download Options."""
@@ -1488,10 +1561,7 @@ def _markscheme():
     
     pid = st.session_state.get("markscheme_paper_id")
     if not pid:
-        st.info("📋 Select a paper from **'My Papers'** and click **'Marks Schema'** to view allocation details.")
-        if st.button("Go to My Papers"):
-            st.session_state.v5_page = "papers"
-            st.rerun()
+        # User wants it empty by default when selecting the tab
         return
 
     papers_list = st.session_state.get("v5_papers", [])
@@ -1947,8 +2017,9 @@ def _settings():
                 with st.spinner("Validating key..."):
                     ok, err = _validate_key(new_key)
                     if ok:
+                        update_env_key(new_key)
                         st.session_state.v5_api_key = new_key
-                        st.success("API Key validated and active!")
+                        st.success("API Key validated, active, and saved persistently!")
                         time.sleep(1)
                         st.rerun()
                     else:

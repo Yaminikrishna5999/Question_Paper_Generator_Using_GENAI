@@ -238,7 +238,12 @@ class QuestionGenerator:
         bloom    = ", ".join(cfg.get("bloom",["Remember","Understand"]))
         sections = ", ".join([f"Section {chr(65+i)}" for i in range(cfg.get("num_sections",3))])
         
-        marks_ln = "\n".join([f"  - {qt}: {cfg.get('marks_per_type', {}).get(qt, 5)} marks" for qt in qtypes])
+        marks_each = []
+        for qt in qtypes:
+            each = cfg.get('weightage_per_type', {}).get(qt, 2)
+            total = cfg.get('marks_per_type', {}).get(qt, 0)
+            marks_each.append(f"  - {qt}: {each} marks per question (Total {total} for this section)")
+        marks_ln = "\n".join(marks_each)
         prev_note = f"\n\nAVOID THESE EXISTING QUESTIONS:\n{prev_qs}" if prev_qs else ""
         
         is_file_mode = cfg.get("source_mode") == "File Upload" and bool(cfg.get("file_content"))
@@ -277,12 +282,13 @@ PAPER STRUCTURE:
 - BLOOM LEVELS: {bloom}
 - MARKS: {marks_ln}
 
-FORMAT:
+FORMAT FOR EACH QUESTION:
 1. [DIFFICULTY][TYPE] Question text?
 a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
+REASONING: [Step-by-step logic/calculation to find the correct answer]
 CORRECT_ANSWER: [Absolute Correct Answer/Explanation]
 Marks: [Value]
 
@@ -316,12 +322,13 @@ STRICT REQUIREMENTS:
 10. NO REDUNDANT TAGS: Do not include metadata like "[2 Marks]" inside the question body.
 11. COMPLETE DISTRIBUTION: You MUST generate questions for EVERY type listed in the distribution. Do not skip any type (e.g., if Short Answer is requested, it MUST be generated).
 
-FORMAT:
+FORMAT FOR EACH QUESTION:
 1. [DIFFICULTY][TYPE] Question text?
 a) Option 1
 b) Option 2
 c) Option 3
 d) Option 4
+REASONING: [Step-by-step logic/calculation to find the correct answer]
 CORRECT_ANSWER: [Absolute Correct Answer/Explanation]
 Marks: [Value]
 
@@ -474,7 +481,8 @@ Start generating now starting from 1:"""
             diff = {"EASY":"Easy","MEDIUM":"Medium","HARD":"Hard"}.get(dm.group(1).upper() if dm else "MEDIUM", "Medium")
             bloom = bm.group(1).capitalize() if bm else "Remember"
             
-            ans, marks_val = "See model answer.", cfg.get('marks_per_type', {}).get(qtype, 5)
+            # Force marks from configuration "Marks Each" (weightage)
+            ans, marks_val = "See model answer.", cfg.get('weightage_per_type', {}).get(qtype, 2)
             
             parsing_mode = "QUESTION" # Modes: QUESTION, OPTIONS
             qtxt_lines = []
@@ -486,14 +494,16 @@ Start generating now starting from 1:"""
                 l_lower = ls.lower()
                 
                 # Check for terminators
-                if l_lower.startswith("correct_answer:") or l_lower.startswith("answer:"):
+                if l_lower.startswith("reasoning:"):
+                    parsing_mode = "REASONING"
+                    continue
+                elif l_lower.startswith("correct_answer:") or l_lower.startswith("answer:"):
                     parts = ln.split(":", 1)
                     ans = parts[1].strip() if len(parts) > 1 else ""
                     parsing_mode = "ANSWER"
                     continue
                 elif l_lower.startswith("marks:"):
-                    m_match = re.search(r'\d+', ls)
-                    if m_match: marks_val = int(m_match.group())
+                    # We ignore AI-generated marks and keep our configured weightage
                     parsing_mode = "DONE"
                     continue
                 
@@ -511,6 +521,10 @@ Start generating now starting from 1:"""
                     opt_content = re.sub(r'^[a-d][\.\)]\s*', '', ls, flags=re.I).strip()
                     if opt_content:
                         options_list.append(opt_content)
+                elif parsing_mode == "REASONING":
+                    # We skip capturing reasoning for the final paper to keep it clean, 
+                    # but we could store it if needed. For now, just advance.
+                    pass
                 elif parsing_mode == "ANSWER":
                     # Capture multi-line answer content
                     if ans:

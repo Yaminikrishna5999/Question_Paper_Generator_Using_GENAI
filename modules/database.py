@@ -119,6 +119,11 @@ def init_db():
         pass
 
     try:
+        cursor.execute("ALTER TABLE user_papers ADD COLUMN admin_downloaded BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
         cursor.execute("ALTER TABLE user_papers ADD COLUMN submission_format TEXT")
     except sqlite3.OperationalError:
         pass
@@ -331,7 +336,7 @@ def get_all_papers_admin():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, user_email, paper_data, created_at, status, admin_comments, is_downloaded 
+        SELECT id, user_email, paper_data, created_at, status, admin_comments, is_downloaded, admin_downloaded
         FROM user_papers 
         ORDER BY created_at DESC
     """)
@@ -348,6 +353,7 @@ def get_all_papers_admin():
             p["approval_status"] = r[4]
             p["admin_comments"] = r[5]
             p["is_downloaded"] = bool(r[6])
+            p["admin_downloaded"] = bool(r[7])
             papers.append(p)
         except:
             pass
@@ -400,6 +406,14 @@ def mark_paper_downloaded(paper_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("UPDATE user_papers SET is_downloaded = 1 WHERE id = ?", (paper_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def mark_paper_downloaded_admin(paper_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_papers SET admin_downloaded = 1 WHERE id = ?", (paper_id,))
     conn.commit()
     conn.close()
     return True

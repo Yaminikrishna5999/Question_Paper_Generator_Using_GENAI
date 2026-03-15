@@ -15,7 +15,7 @@ from modules.database import (
     add_announcement, get_system_settings, update_system_setting,
     get_db_raw_data, get_faculty_metrics, get_distinct_departments,
     update_user_status, update_user_details, add_user, 
-    delete_announcement, add_audit_log
+    delete_announcement, add_audit_log, mark_paper_downloaded_admin
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -919,34 +919,25 @@ def _all_papers():
                     conf_col1, conf_col2 = st.columns([1, 1])
                     with conf_col1:
                         try:
+                            f_path = None
+                            mime, ext = "", ""
                             if fmt == "PDF":
                                 f_path = ExportHandler.export_to_pdf(p_norm, f"Final_{p['db_id']}.pdf")
                                 mime, ext = "application/pdf", "pdf"
-                                if f_path and os.path.exists(f_path):
-                                    from modules.database import mark_paper_downloaded
-                                    mark_paper_downloaded(p['db_id'])
-                                    with open(f_path, "rb") as f:
-                                        st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
-                                                          mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
                             elif fmt == "DOCX":
                                 f_path = ExportHandler.export_to_docx(p_norm, f"Final_{p['db_id']}.docx")
                                 mime, ext = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"
-                                if f_path and os.path.exists(f_path):
-                                    from modules.database import mark_paper_downloaded
-                                    mark_paper_downloaded(p['db_id'])
-                                    with open(f_path, "rb") as f:
-                                        st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
-                                                          mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
-                            else:
-                                txt_data = ExportHandler._to_txt(p_norm)
-                                st.download_button(f"✅ Click to Download {fmt}", txt_data, file_name=f"Paper_{p['db_id']}.txt", 
-                                                  key=f"dl_final_{p['db_id']}", use_container_width=True)
-                                f_path = None
                             
                             if f_path and os.path.exists(f_path):
+                                mark_paper_downloaded_admin(p['db_id'])
                                 with open(f_path, "rb") as f:
                                     st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
                                                       mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
+                            elif fmt == "TXT":
+                                txt_data = ExportHandler._to_txt(p_norm)
+                                st.download_button(f"✅ Click to Download {fmt}", txt_data, file_name=f"Paper_{p['db_id']}.txt", 
+                                                  key=f"dl_final_{p['db_id']}", use_container_width=True)
+                                mark_paper_downloaded_admin(p['db_id'])
                         except Exception as e:
                             st.error(f"Download Error: {str(e)}")
                     
@@ -1405,10 +1396,10 @@ def _adm_downloads():
         p_norm['db_id'] = p['db_id']
         p_norm['user_email'] = p['user_email']
         p_norm['created_at_raw'] = p['created_at_raw']
-        p_norm['status'] = p['approval_status']
+        p_norm['admin_downloaded'] = p.get('admin_downloaded', False)
         
-        # Filtering logic: ONLY SHOW DOWNLOADED PAPERS
-        if not p.get('is_downloaded'): continue
+        # Filtering logic: ONLY SHOW PAPERS DOWNLOADED BY THE ADMIN
+        if not p_norm['admin_downloaded']: continue
         
         match_search = not search or (search in p_norm['exam_name'].lower() or search in p_norm['user_email'].lower())
         match_dept = f_dept == "All Departments" or p_norm['dept'] == f_dept
@@ -1431,7 +1422,7 @@ def _adm_downloads():
                     <div style="flex:1;">
                         <div style="font-size:15px; font-weight:700; color:{C.t1}; margin-bottom:4px;">{p['exam_name']}</div>
                         <div style="font-size:11px; color:{C.t3}; font-weight:500;">
-                           👤 {p['user_email']} · 📅 {p['created_at_raw']}
+                           👤 {p['user_email']} · 📅 {p['created_at_raw']} · <span style="color:{C.violet}; font-weight:700;">AdminDL: {p['admin_downloaded']}</span>
                         </div>
                         <div style="margin-top:8px; display:flex; gap:8px;">
                             <span style="font-size:9.5px; font-weight:800; color:{C.violet}; background:#F4F0FB; padding:2px 10px; border-radius:15px; border:1px solid {C.sbBd};">{p['course_name']}</span>

@@ -73,15 +73,17 @@ class ExportHandler:
 
         # ── Title (Professional Layout) ──
         pdf.set_font('Times', 'B', 22)
-        exam_name = ExportHandler._safe_pdf_text(paper.get('exam_name', 'EXAMINATION QUESTION PAPER'))
-        pdf.cell(0, 12, exam_name.upper(), 0, 1, 'C')
+        exam_name = paper.get('exam_name', paper.get('title', 'EXAMINATION')).upper()
+        pdf.cell(0, 12, ExportHandler._safe_pdf_text(exam_name), 0, 1, 'C')
         
         # Course Detail
         pdf.set_font('Times', 'B', 15)
-        course_str = f"Course: {paper.get('course_name','')} ({paper.get('course_code','')})"
+        c_name = paper.get('course_name', '')
+        c_code = paper.get('course_code', '')
+        course_str = f"Course: {c_name} ({c_code})" if c_code else f"Course: {c_name}"
         pdf.cell(0, 10, ExportHandler._safe_pdf_text(course_str), 0, 1, 'C')
         
-        # Meta Details Line
+        # Meta Details Line (Piped format matching UI)
         pdf.set_font('Times', '', 11)
         duration = paper.get('duration', '3 Hours')
         max_marks = paper.get('max_marks', paper.get('total_marks', 0))
@@ -126,7 +128,11 @@ class ExportHandler:
                 pdf.set_font('Times', 'B', 14)
                 header_text = f"SECTION {sec_letter}: {current_type.upper()}S"
                 if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
-                pdf.cell(0, 8, header_text, 0, 1, 'L')
+                
+                # Draw underlined header matching UI
+                w = pdf.get_string_width(header_text) + 2
+                pdf.cell(w, 8, header_text, 0, 1, 'L')
+                pdf.line(10, pdf.get_y(), 10 + w, pdf.get_y())
                 pdf.ln(4)
                 type_idx += 1
             
@@ -162,8 +168,8 @@ class ExportHandler:
         pdf.set_draw_color(100, 100, 100)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(3)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(0, 8, '--- End of Question Paper ---', 0, 1, 'C')
+        pdf.set_font('Times', 'B', 12)
+        pdf.cell(0, 10, '*** END OF QUESTION PAPER ***', 0, 1, 'C')
 
         pdf.output(filepath)
         return filepath
@@ -207,6 +213,7 @@ class ExportHandler:
         date_str = datetime.now().strftime('%d-%m-%Y')
         dp = doc.add_paragraph()
         dp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Piped format matching UI
         meta_text = f"Set: {paper.get('set','A')}  |  Time: {paper.get('duration','3 Hours')}  |  Max Marks: {max_marks}  |  Date: {date_str}"
         dr = dp.add_run(meta_text)
         dr.font.size = Pt(11)
@@ -271,7 +278,8 @@ class ExportHandler:
                 if "MCQ" in current_type.upper(): header_text = f"SECTION {sec_letter}: MCQs"
                 sh_run = sh.add_run(header_text)
                 sh_run.bold = True
-                sh_run.font.size = Pt(12)
+                sh_run.underline = True
+                sh_run.font.size = Pt(14)
 
             q_count += 1
             p = doc.add_paragraph()
@@ -304,10 +312,11 @@ class ExportHandler:
 
         # ── End ──
         doc.add_paragraph('_' * 80)
-        end = doc.add_paragraph('--- End of Question Paper ---')
+        end = doc.add_paragraph('*** END OF QUESTION PAPER ***')
         end.alignment = WD_ALIGN_PARAGRAPH.CENTER
         if end.runs:
             end.runs[0].bold = True
+            end.runs[0].font.size = Pt(12)
 
         doc.save(filepath)
         return filepath
@@ -385,7 +394,7 @@ class ExportHandler:
                     lines.append(f"   {prefixes[i]} {opt}")
                 lines.append("") # Blank line after MCQ
         
-        lines += ["","="*65,"  — End of Question Paper —","="*65]
+        lines += ["","="*65,f"{'*** END OF QUESTION PAPER ***':^65}","="*65]
         return "\n".join(lines)
 
     @staticmethod
