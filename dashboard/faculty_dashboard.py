@@ -2,18 +2,18 @@ import streamlit as st
 import time
 import re
 import os
+import base64
 from datetime import datetime
 
 # ── Project imports ──
 from config import Config
 from modules.export_handler import ExportHandler
 import io
-import os
 from modules.database import (
     save_paper, get_user_papers, delete_paper, 
     add_audit_log, get_announcements, get_system_settings,
     get_notifications, mark_notification_read, add_notification,
-    submit_paper
+    submit_paper, delete_announcement
 )
 
 # ── Load .env (already handled by Config, but kept for safety) ──
@@ -383,6 +383,23 @@ def _css():
     .stExpander summary svg + div {{
         display: none !important;
     }}
+
+    /* ── Navigation Badges ── */
+    .nav-badge-container {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 8px;
+    }}
+    .nav-dot {{
+        width: 8px;
+        height: 8px;
+        background-color: #FF4B4B;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2);
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -497,10 +514,19 @@ def show_v5_faculty_dashboard():
         </div>""", unsafe_allow_html=True)
 
         # Fetch unread count for sidebar
-        from modules.database import get_notifications
-        user_email = user.get('email', '')
-        unread_notifs = [n for n in get_notifications(user_email) if not n["is_read"]]
-        unread_count = len(unread_notifs)
+        from modules.database import get_unread_notification_count, get_announcements
+        u_email = st.session_state.get("user_data", {}).get("email", "")
+        unread_count = get_unread_notification_count(u_email) if u_email else 0
+
+        # Check for recent announcements (last 24 hours) as a "new" indicator
+        recent_anns = get_announcements(user_email=u_email) if u_email else []
+        has_new_ann = False
+        if recent_anns:
+            try:
+                last_ann_time = datetime.strptime(recent_anns[0]['created_at'], "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - last_ann_time).total_seconds() < 86400: # 24 hours
+                    has_new_ann = True
+            except: pass
 
         # ── Navigation ──
         for section, items in FACULTY_NAV:
@@ -508,18 +534,38 @@ def show_v5_faculty_dashboard():
             for icon, label, page_id in items:
                 active  = (st.session_state.v5_page == page_id)
                 
-                # Dynamic label with unread count
-                display_label = label
+                # Show red dot if there are unread items
+                show_dot = False
                 if page_id == "faculty_alerts" and unread_count > 0:
-                    display_label = f"{label} ({unread_count})"
+                    show_dot = True
+                elif page_id == "announcements_page" and has_new_ann:
+                    show_dot = True
                 
-                btn_lbl = f"{icon}  {display_label}"
                 cls     = "nav-on" if active else "nav-off"
                 st.markdown(f'<div class="{cls}" style="padding:1px 9px 0;">', unsafe_allow_html=True)
-                clicked = st.button(btn_lbl, key=f"nav_{page_id}", use_container_width=True)
-                if clicked and not active:
-                    st.session_state.v5_page = page_id
-                    st.rerun()
+                
+                # Create a layout for the button and the dot
+                if show_dot:
+                    st.markdown(f"""
+                    <div class="nav-badge-container">
+                        <div style="flex:1;">
+                    """, unsafe_allow_html=True)
+                    
+                    if st.button(f"{icon}  {label}", key=f"nav_{page_id}", use_container_width=True):
+                        if not active:
+                            st.session_state.v5_page = page_id
+                            st.rerun()
+                            
+                    st.markdown(f"""
+                        </div>
+                        <div class="nav-dot"></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    if st.button(f"{icon}  {label}", key=f"nav_{page_id}", use_container_width=True):
+                        if not active:
+                            st.session_state.v5_page = page_id
+                            st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
         # ── Sign out ──
@@ -685,14 +731,20 @@ def _dash(user):
 
         st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
         st.markdown(f'<div style="font-size:14px; font-weight:800; color:{C.t1}; margin-bottom:12px;">📫 Latest Notice</div>', unsafe_allow_html=True)
-        anns = get_announcements()
+        u_email = st.session_state.get("user_data", {}).get("email")
+        anns = get_announcements(user_email=u_email)
         if anns:
             a = anns[0]
+            # Simple type mapping for home view
+            accent = C.violet if a['type']=='Info' else C.pink if a['type']=='Warning' else C.green
             st.markdown(f"""
-            <div class="pg-card" style="padding:15px; background:linear-gradient(to right, #ffffff, {C.pageBg});">
-                <div style="font-size:11px; font-weight:800; color:{C.t1}; margin-bottom:5px;">{a['title']}</div>
-                <div style="font-size:9px; color:{C.t3}; line-height:1.6;">{a['message'][:120]}...</div>
-                <div style="font-size:8.5px; color:{C.t4}; margin-top:8px; font-weight:700; text-align:right;">{a['created_at']}</div>
+            <div style="padding:15px; background:white; border-left:4px solid {accent}; border-radius:8px; box-shadow:{C.cardSh};">
+                <div style="font-size:12px; font-weight:800; color:{C.t1}; margin-bottom:5px;">{a['title']}</div>
+                <div style="font-size:11px; color:{C.t3}; line-height:1.5;">{a['message'][:100]}...</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                    <span style="font-size:9px; background:{C.pageBg}; padding:2px 8px; border-radius:10px; color:{C.t4}; font-weight:700;">{a['type']}</span>
+                    <span style="font-size:8.5px; color:{C.t4}; font-weight:600;">{a['created_at']}</span>
+                </div>
             </div>""", unsafe_allow_html=True)
         else:
             st.markdown(f"""
@@ -1682,27 +1734,140 @@ def _downloads():
 # PAGE: ANNOUNCEMENTS
 # ═══════════════════════════════════════════════════════════════
 def _announcements():
-    st.markdown(f'<div style="font-size:15px;font-weight:800;color:{C.t1};margin-bottom:16px;">System Announcements</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:18px; font-weight:800; color:{C.t1}; margin-bottom:20px; display:flex; align-items:center; gap:10px;">📫 System Broadcasts</div>', unsafe_allow_html=True)
+    
+    # Type configuration with premium colors and accent borders
     ts = {
-        "warning": ("#FFF8EC","#F8D89F","⚠️"),
-        "info":    ("#EFF6FF","#BFDBFE","ℹ️"),
-        "success": ("#EDFAF4","#B2EAD8","✅"),
+        "Warning": (C.orange, "#FFF8EC", "#F8D89F", "⚠️", "#9D5D00"),
+        "Info":    (C.blue,   "#EFF6FF", "#BFDBFE", "ℹ️", "#1E40AF"),
+        "Update":  (C.green,  "#EDFAF4", "#B2EAD8", "🔄", "#065F46"),
+        "Event":   (C.violet, "#F4F0FB", "#D4C1EC", "📅", "#5B21B6"),
     }
-    anns = get_announcements()
+    
+    u_email = st.session_state.get("user_data", {}).get("email")
+    anns = get_announcements(user_email=u_email)
+    
     if not anns:
-        st.info("No active announcements from administration.")
+        st.markdown(f"""
+        <div style="background:{C.pageBg}; border:2px dashed {C.sbBd}; border-radius:15px; padding:40px; text-align:center;">
+            <div style="font-size:40px; margin-bottom:10px;">📭</div>
+            <div style="font-size:14px; color:{C.t4}; font-weight:600;">No active announcements from administration.</div>
+        </div>
+        """, unsafe_allow_html=True)
         return
         
     for a in anns:
-        bg, bd, ico = ts.get(a["type"], (C.pageBg, C.sbBd, "📢"))
+        accent, bg, bd, ico, tColor = ts.get(a["type"], (C.t4, C.pageBg, C.sbBd, "📢", C.t1))
+        
+        # Main Card Content with Left Accent Border
         st.markdown(f"""
-        <div style="background:{bg};border:1px solid {bd};border-radius:10px;padding:13px;margin-bottom:9px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-            <div style="font-size:11.5px;font-weight:800;color:{C.t1};">{ico} {a['title']}</div>
-            <div style="font-size:8.5px;color:{C.t4};">{a['created_at']}</div>
-          </div>
-          <div style="font-size:10.5px;color:{C.t2};line-height:1.6;">{a['message']}</div>
-        </div>""", unsafe_allow_html=True)
+        <div style="background: white; border: 1px solid {bd}; border-left: 5px solid {accent}; border-radius: 12px; padding: 0; margin-bottom: 22px; box-shadow: {C.cardSh}; overflow: hidden; transition: transform 0.2s ease;">
+            <div style="background: {bg}; padding: 12px 20px; border-bottom: 1px solid {bd}; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="background: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid {bd};">
+                        {ico}
+                    </div>
+                    <span style="background: {accent}; color: white; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">
+                        {a['type']}
+                    </span>
+                </div>
+                <div style="font-size: 10.5px; color: {C.t3}; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+                    <span style="opacity: 0.6;">🕒</span> {a['created_at']}
+                </div>
+            </div>
+            <div style="padding: 24px 20px;">
+                <div style="font-size: 17px; font-weight: 800; color: {C.t1}; margin-bottom: 10px; line-height: 1.3;">{a['title']}</div>
+                <div style="font-size: 13.5px; color: {C.t2}; line-height: 1.6; margin-bottom: 5px;">{a['message']}</div>
+        """, unsafe_allow_html=True)
+        
+        # Action Bar (Deadlines & Attachments)
+        if a.get('deadline') or a.get('attachment'):
+            st.markdown(f'<div style="height:1px; background:{C.sbLine}; margin-bottom:15px;"></div>', unsafe_allow_html=True)
+            ac1, ac2 = st.columns([0.4, 0.6])
+            
+            with ac1:
+                if a.get('deadline'):
+                    st.markdown(f"""
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="background:{C.pageBg}; padding:6px 12px; border-radius:30px; border:1px solid {C.sbBd};">
+                            <span style="font-size:11px; color:{C.pink}; font-weight:800;">⏳ Submit By: {a['deadline']}</span>
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with ac2:
+                if a.get('attachment'):
+                    fpath = a['attachment']
+                    if os.path.exists(fpath):
+                        fname_lower = os.path.basename(fpath).lower()
+                        is_image = any(fname_lower.endswith(ext) for ext in ['.png', '.jpg', '.jpeg'])
+                        
+                        if is_image:
+                            v_col1, v_col2 = st.columns(2)
+                            
+                            # 1. Download Button
+                            with open(fpath, "rb") as f:
+                                data = f.read()
+                                v_col1.download_button(
+                                    label="📎 Download",
+                                    data=data,
+                                    file_name=os.path.basename(fpath),
+                                    key=f"dl_pg_{a['id']}",
+                                    use_container_width=True
+                                )
+                            
+                            # 2. View Toggle Button
+                            v_key = f"view_state_{a['id']}"
+                            if v_key not in st.session_state:
+                                st.session_state[v_key] = False
+                                
+                            if v_col2.button("👁️ View", key=f"btn_v_{a['id']}", use_container_width=True):
+                                st.session_state[v_key] = not st.session_state[v_key]
+                                st.rerun()
+                        else:
+                            # 1. Download Only for PDF/Word
+                            with open(fpath, "rb") as f:
+                                data = f.read()
+                                st.download_button(
+                                    label="📎 Download Attachment",
+                                    data=data,
+                                    file_name=os.path.basename(fpath),
+                                    key=f"dl_pg_{a['id']}",
+                                    use_container_width=True
+                                )
+
+        # Inline Viewer Section
+        v_key = f"view_state_{a['id']}"
+        if st.session_state.get(v_key):
+            st.markdown('<div style="margin-top:15px; border-top:1px dashed #d1d5db; padding-top:15px;">', unsafe_allow_html=True)
+            
+            fpath = a['attachment']
+            fname = os.path.basename(fpath).lower()
+            
+            # Content Rendering
+            try:
+                if fname.endswith(".pdf"):
+                    with open(fpath, "rb") as f:
+                        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                        st.markdown(pdf_display, unsafe_allow_html=True)
+                elif fname.endswith((".png", ".jpg", ".jpeg")):
+                    st.image(fpath, use_container_width=True)
+                else:
+                    st.warning("Preview not available for this file type. Please download to view.")
+            except Exception as e:
+                st.error(f"Error loading preview: {e}")
+            
+            st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True)
+            
+            # Close Button at the Bottom
+            if st.button("✖️ Close Preview Window", key=f"close_{a['id']}", use_container_width=True, type="secondary"):
+                st.session_state[v_key] = False
+                st.rerun()
+                
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════

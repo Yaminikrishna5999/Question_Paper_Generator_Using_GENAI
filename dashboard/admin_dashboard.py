@@ -14,7 +14,8 @@ from modules.database import (
     delete_paper, verify_user, get_audit_logs, get_announcements,
     add_announcement, get_system_settings, update_system_setting,
     get_db_raw_data, get_faculty_metrics, get_distinct_departments,
-    update_user_status, update_user_details, add_user
+    update_user_status, update_user_details, add_user, 
+    delete_announcement, add_audit_log
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -96,14 +97,9 @@ ADMIN_NAV = [
     ("USER MANAGEMENT", [("👨‍🏫", "Faculty Management", "fac_mgt"),
                          ("📜", "Activity Logs", "logs")]),
     ("ACADEMIC CONTROL",[("📄", "All Papers", "all_papers"),
-                         ("🗂️", "Global Question Bank", "global_qbank"),
-                         ("📐", "Templates Management", "adm_templates")]),
-    ("ANALYTICS",       [("📊", "System Analytics", "sys_analytics"),
-                         ("📈", "Usage Statistics", "usage_stats")]),
+                         ("🗂️", "Global Question Bank", "global_qbank")]),
     ("COMMUNICATION",   [("📢", "Announcements Manager", "ann_mgt")]),
-    ("SYSTEM",          [("🔑", "API Usage Monitor", "api_monitor"),
-                         ("⚙️", "System Settings", "sys_settings"),
-                         ("🛡️", "Security Center", "security"),
+    ("SYSTEM",          [("⚙️", "System Settings", "sys_settings"),
                          ("💾", "Database Inspector", "db_inspector")]),
     ("OTHER",           [("📥", "Download Center", "adm_downloads"),
                          ("ℹ️", "About", "adm_about")]),
@@ -241,6 +237,23 @@ def _css():
     div[data-baseweb="select"], div[data-baseweb="select"] *, .stSelectbox, .stSelectbox * {{
         cursor: pointer !important;
     }}
+
+    /* ── Navigation Badges ── */
+    .nav-badge-container {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 8px;
+    }}
+    .nav-dot {{
+        width: 8px;
+        height: 8px;
+        background-color: #FF4B4B;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2);
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -294,28 +307,17 @@ def show_v5_admin_dashboard():
                       box-shadow:0 0 0 2px #E8F7EE;flex-shrink:0;"></div>
         </div>""", unsafe_allow_html=True)
 
-        # Fetch unread count for sidebar badge
-        from modules.database import get_notifications
-        unread_notifs = [n for n in get_notifications("admin@gmail.com") if not n["is_read"]]
-        unread_count = len(unread_notifs)
-
         for section, items in ADMIN_NAV:
             st.markdown(f'<span class="sb-lbl">{section}</span>', unsafe_allow_html=True)
             for icon, label, page_id in items:
                 active = (st.session_state.admin_page == page_id)
                 
-                # Dynamic label with unread count
-                display_label = label
-                if page_id == "admin_alerts" and unread_count > 0:
-                    display_label = f"{label} ({unread_count})"
-                
-                btn_lbl = f"{icon}  {display_label}"
                 cls = "nav-on" if active else "nav-off"
                 st.markdown(f'<div class="{cls}" style="padding:1px 9px 0;">', unsafe_allow_html=True)
-                clicked = st.button(btn_lbl, key=f"adm_nav_{page_id}", use_container_width=True)
-                if clicked and not active:
-                    st.session_state.admin_page = page_id
-                    st.rerun()
+                if st.button(f"{icon}  {label}", key=f"adm_nav_{page_id}", use_container_width=True):
+                    if not active:
+                        st.session_state.admin_page = page_id
+                        st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown(f'<div style="border-top:1px solid {C.sbBd};margin:10px 0 0;"></div>', unsafe_allow_html=True)
@@ -920,9 +922,21 @@ def _all_papers():
                             if fmt == "PDF":
                                 f_path = ExportHandler.export_to_pdf(p_norm, f"Final_{p['db_id']}.pdf")
                                 mime, ext = "application/pdf", "pdf"
+                                if f_path and os.path.exists(f_path):
+                                    from modules.database import mark_paper_downloaded
+                                    mark_paper_downloaded(p['db_id'])
+                                    with open(f_path, "rb") as f:
+                                        st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
+                                                          mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
                             elif fmt == "DOCX":
                                 f_path = ExportHandler.export_to_docx(p_norm, f"Final_{p['db_id']}.docx")
                                 mime, ext = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"
+                                if f_path and os.path.exists(f_path):
+                                    from modules.database import mark_paper_downloaded
+                                    mark_paper_downloaded(p['db_id'])
+                                    with open(f_path, "rb") as f:
+                                        st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
+                                                          mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
                             else:
                                 txt_data = ExportHandler._to_txt(p_norm)
                                 st.download_button(f"✅ Click to Download {fmt}", txt_data, file_name=f"Paper_{p['db_id']}.txt", 
@@ -958,31 +972,98 @@ def _all_papers():
         st.session_state.jump_to_paper = None
 
 def _global_qbank():
-    st.markdown(f'<div class="pg-card"><h3>Global Question Repository</h3>', unsafe_allow_html=True)
-    st.info("Aggregate view of all AI-generated questions across departments.")
-    # Here we would normally query questions table, but we aggregate from papers
+    st.markdown(f'''
+    <div style="background:white; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
+        <h3 style="margin:0; color:{C.t1}; font-size:18px; font-weight:800;">🌐 Global Question Repository</h3>
+        <p style="font-size:12.5px; color:{C.t3}; margin-top:4px;">Aggregate view of all AI-generated questions across departments and faculty.</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # 1. Aggregate Questions
     papers = get_all_papers_admin()
     all_qs = []
     for p in papers:
-        for q in p.get('questions', []):
-            q['paper_title'] = p.get('exam_name')
-            q['author'] = p['user_email']
-            all_qs.append(q)
-            
+        # Some older papers might have different structures, but standard qCnt papers have 'questions' list
+        qs_list = p.get('questions', [])
+        for q in qs_list:
+            q_copy = q.copy()
+            q_copy['paper_title'] = p.get('exam_name', 'Untitled Paper')
+            q_copy['author'] = p.get('user_email', 'Unknown')
+            q_copy['author_name'] = p.get('user_email', 'Unknown').split('@')[0].title()
+            all_qs.append(q_copy)
+
     if not all_qs:
-        st.warning("No questions found in the system.")
-    else:
-        st.write(f"Total Questions in Bank: {len(all_qs)}")
-        # Simple list for now
-        for q in all_qs[:10]: # Limit for performance
-            st.markdown(f"""
-            <div style="padding:10px; border:1px solid #eee; border-radius:8px; margin-bottom:8px;">
-              <small style="color:{C.t4}">{q.get('type')} · {q.get('difficulty')} · {q.get('marks')} Marks</small><br>
-              <strong>{q.get('q')}</strong><br>
-              <small style="color:{C.t3}">Author: {q['author']}</small>
+        st.info("No questions found in the system yet.")
+        return
+
+    # 2. Filters
+    f1, f2, f3 = st.columns([2, 1, 1])
+    search_q = f1.text_input("🔍 Search Keyword", placeholder="Search question text...", key="qbank_search").strip().lower()
+    
+    q_types = ["All Types"] + sorted(list(set(str(q.get('type','Other')) for q in all_qs)))
+    f_type = f2.selectbox("📁 Filter Type", q_types, key="qbank_type")
+    
+    q_diffs = ["All Difficulty"] + sorted(list(set(str(q.get('difficulty','Medium')) for q in all_qs)))
+    f_diff = f3.selectbox("📉 Filter Difficulty", q_diffs, key="qbank_diff")
+
+    # 3. Filtering Logic
+    filtered_qs = []
+    for q in all_qs:
+        match_search = not search_q or search_q in str(q.get('q', '')).lower()
+        match_type = f_type == "All Types" or str(q.get('type')) == f_type
+        match_diff = f_diff == "All Difficulty" or str(q.get('difficulty')) == f_diff
+        
+        if match_search and match_type and match_diff:
+            filtered_qs.append(q)
+
+    # 4. Display Results
+    st.markdown(f'<div style="font-size:13px; font-weight:700; color:{C.t4}; margin-bottom:15px; letter-spacing:0.5px;">RESULT: {len(filtered_qs)} QUESTIONS FOUND</div>', unsafe_allow_html=True)
+    
+    if not filtered_qs:
+        st.warning("No questions match your current filters.")
+        return
+
+    type_styles = {
+        "MCQ": (C.sky, "#EFF6FF"),
+        "Short": (C.violet, "#F4F0FB"),
+        "Long": (C.pink, "#FFF1F2")
+    }
+    
+    diff_styles = {
+        "Easy": (C.green, "#EDFAF4"),
+        "Medium": (C.orange, "#FFF8EC"),
+        "Hard": ("#E53E3E", "#FFF5F5")
+    }
+
+    for idx, q in enumerate(filtered_qs):
+        t_val = str(q.get('type',''))
+        d_val = str(q.get('difficulty',''))
+        
+        t_color, t_bg = type_styles.get(t_val, (C.t3, "#F8F9FA"))
+        d_color, d_bg = diff_styles.get(d_val, (C.t4, "#F8F9FA"))
+        
+        st.markdown(f"""
+        <div style="background:white; border:1px solid {C.sbBd}; border-radius:12px; padding:20px; margin-bottom:15px; box-shadow:{C.cardSh}; border-left:5px solid {t_color};">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                <div style="display:flex; gap:8px;">
+                    <span style="background:white; color:{t_color}; padding:3px 12px; border-radius:20px; font-size:10px; font-weight:800; border:1px solid {t_color}; text-transform:uppercase;">{t_val}</span>
+                    <span style="background:{d_bg}; color:{d_color}; padding:3px 12px; border-radius:20px; font-size:10px; font-weight:800; border:1px solid {d_color}33; text-transform:uppercase;">{d_val}</span>
+                </div>
+                <div style="font-size:11px; font-weight:800; color:{C.violet}; background:#F4F0FB; border-radius:50px; padding:2px 12px; border:1px solid {C.sbBd};">
+                    {q.get('marks')} MARKS
+                </div>
             </div>
-            """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+            <div style="font-size:15px; font-weight:600; color:{C.t1}; line-height:1.5; margin-bottom:12px;">{q.get('q')}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed {C.sbBd}; padding-top:12px; margin-top:10px;">
+                <div style="font-size:10px; color:{C.t4}; font-weight:600;">
+                    <span style="opacity:0.6;">📄 Paper:</span> {q['paper_title']}
+                </div>
+                <div style="font-size:10px; color:{C.t4}; font-weight:600;">
+                    <span style="opacity:0.6;">👤 Author:</span> {q['author_name']}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 def _sys_analytics():
     st.markdown(f'<div class="pg-card"><h3>System Analytics</h3>', unsafe_allow_html=True)
@@ -996,31 +1077,226 @@ def _sys_analytics():
     st.markdown("</div>", unsafe_allow_html=True)
 
 def _ann_mgt():
-    st.markdown(f'<div class="pg-card"><h3>Announcements Manager</h3>', unsafe_allow_html=True)
-    with st.form("new_ann"):
-        title = st.text_input("Announcement Title")
-        body = st.text_area("Message Body")
-        antype = st.selectbox("Type", ["info", "success", "warning"])
-        if st.form_submit_button("Post Announcement"):
-            if title and body:
-                add_announcement(title, body, antype)
-                st.success("Announcement posted to all faculty dashboards.")
-            else:
-                st.error("Please fill in all fields.")
+    # Header with Toggle Button
+    h_col1, h_col2 = st.columns([0.7, 0.3])
+    with h_col1:
+        st.markdown(f'<h3 style="color:{C.t1}; margin:0; display:flex; align-items:center; gap:10px;">📢 Announcements Manager</h3>', unsafe_allow_html=True)
     
+    # State for Form Visibility
+    if "show_ann_form" not in st.session_state:
+        st.session_state.show_ann_form = False
+        
+    with h_col2:
+        if not st.session_state.show_ann_form:
+            if st.button("➕ Add Announcement", key="toggle_ann_form", use_container_width=True):
+                st.session_state.show_ann_form = True
+                st.rerun()
+
+    st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+    # 1. Announcement Creation Form (Toggleable)
+    if st.session_state.show_ann_form:
+        st.markdown(f'<h4 style="color:{C.t1}; margin-bottom:15px;">New Announcement Details</h4>', unsafe_allow_html=True)
+        
+        container = st.container()
+        with container:
+            # 1. Title & Message
+            title = st.text_input("Announcement Title", placeholder="Enter title...", key="ann_title")
+            body = st.text_area("Message Body", placeholder="Enter message...", height=120, key="ann_body")
+            
+            # 2. Type
+            antype = st.selectbox("Type", ["Info", "Warning", "Update", "Event"], key="ann_type")
+            
+            # 3. Send To
+            send_to = st.radio("Send To", ["All Faculty", "Specific Faculty"], horizontal=True, key="ann_send_to")
+            
+            # 4. Target Faculty (Conditional)
+            target_email = None
+            if send_to == "Specific Faculty":
+                fac_users = [u for u in get_all_users() if u['role'] == 'faculty']
+                if not fac_users:
+                    st.warning("No faculty accounts found.")
+                else:
+                    fac_options = {f"{u['name']} ({u['email']})": u['email'] for u in fac_users}
+                    selected_fac = st.selectbox("Select Faculty Member", list(fac_options.keys()), index=None, placeholder="Choose a faculty member...", key="ann_target_fac")
+                    target_email = fac_options.get(selected_fac) if selected_fac else None
+            
+            st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+            
+            # 5. Submission Deadline (Conditional)
+            has_deadline = st.radio("Include Submission Deadline?", ["No", "Yes"], horizontal=True, key="ann_has_deadline")
+            deadline_date = None
+            if has_deadline == "Yes":
+                deadline_date = st.date_input("Last Date to Submit", key="ann_deadline")
+                
+            # 6. Attachment (Conditional)
+            has_attachment = st.radio("Include Attachment?", ["No", "Yes"], horizontal=True, key="ann_has_attachment")
+            attachment_path = None
+            if has_attachment == "Yes":
+                uploaded_file = st.file_uploader("Upload Attachment", type=["pdf", "doc", "docx", "png", "jpg", "jpeg"], key="ann_file")
+                if uploaded_file:
+                    os.makedirs("data/attachments", exist_ok=True)
+                    attachment_path = os.path.join("data/attachments", f"{int(time.time())}_{uploaded_file.name}")
+                    with open(attachment_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+            
+            st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
+            
+            # CSS for Red Buttons
+            st.markdown("""
+            <style>
+            .stButton button[kind="primary"] {
+                background-color: #FF4B4B !important;
+                border-color: #FF4B4B !important;
+                color: white !important;
+            }
+            .stButton button[kind="primary"]:hover {
+                background-color: #ff3333 !important;
+                border-color: #ff3333 !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            b_col1, b_col2 = st.columns(2)
+            
+            if b_col1.button("Post Announcement", type="primary", use_container_width=True):
+                if not title or not body:
+                    st.error("Title and Message Body are required.")
+                elif send_to == "Specific Faculty" and not target_email:
+                    st.error("Please select a faculty member.")
+                else:
+                    final_target_type = "specific" if send_to == "Specific Faculty" else "all"
+                    final_deadline = str(deadline_date) if deadline_date else None
+                    
+                    add_announcement(
+                        title=title,
+                        message=body,
+                        type=antype,
+                        target_type=final_target_type,
+                        target_email=target_email,
+                        deadline=final_deadline,
+                        attachment=attachment_path
+                    )
+                    
+                    add_audit_log("admin@gmail.com", "Announcement Posted", f"Posted {antype} notice: {title} to {send_to}")
+                    st.success(f"Announcement posted to {send_to}.")
+                    time.sleep(1)
+                    st.session_state.show_ann_form = False
+                    st.rerun()
+
+            if b_col2.button("✖️ Close Form", type="primary", use_container_width=True):
+                st.session_state.show_ann_form = False
+                st.rerun()
+    
+    # History Section
     st.markdown("<h4>Current Announcements</h4>", unsafe_allow_html=True)
     anns = get_announcements()
     if not anns:
         st.info("No announcements found.")
     else:
+        # Type configuration with premium colors and accent borders
+        ts = {
+            "Warning": (C.orange, "#FFF8EC", "#F8D89F", "⚠️", "#9D5D00"),
+            "Info":    (C.blue,   "#EFF6FF", "#BFDBFE", "ℹ️", "#1E40AF"),
+            "Update":  (C.green,  "#EDFAF4", "#B2EAD8", "🔄", "#065F46"),
+            "Event":   (C.violet, "#F4F0FB", "#D4C1EC", "📅", "#5B21B6"),
+        }
+        
         for a in anns:
+            accent, bg, bd, ico, tColor = ts.get(a["type"], (C.t4, C.pageBg, C.sbBd, "📢", C.t1))
+            target_str = f"Target: {a['target_email']}" if a['target_type'] == 'specific' else "Target: All Faculty"
+            
+            # Main Card Content with Left Accent Border
             st.markdown(f"""
-            <div style="padding:10px; border-left:4px solid {C.violet if a['type']=='info' else C.green if a['type']=='success' else C.pink}; background:#f9f9f9; margin-bottom:10px; border-radius:0 8px 8px 0;">
-              <strong>{a['title']}</strong><br><small>{a['created_at']}</small><br>
-              <p style="font-size:12px;">{a['message']}</p>
-            </div>
+            <div style="background: white; border: 1px solid {bd}; border-left: 5px solid {accent}; border-radius: 12px; padding: 0; margin-bottom: 22px; box-shadow: {C.cardSh}; overflow: hidden;">
+                <div style="background: {bg}; padding: 12px 20px; border-bottom: 1px solid {bd}; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="background: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid {bd};">
+                            {ico}
+                        </div>
+                        <span style="background: {accent}; color: white; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">
+                            {a['type']}
+                        </span>
+                    </div>
+                    <div style="font-size: 10.5px; color: {C.t3}; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+                        <span style="opacity: 0.6;">🕒</span> {a['created_at']}
+                    </div>
+                </div>
+                <div style="padding: 24px 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="font-size: 17px; font-weight: 800; color: {C.t1}; margin-bottom: 5px; line-height: 1.3;">{a['title']}</div>
+                        <div style="background: #f0f0f0; padding: 2px 8px; border-radius: 50px; font-size: 9px; font-weight: 700; color: {C.t3};">{target_str}</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: {C.t2}; line-height: 1.6; margin-bottom: 5px;">{a['message']}</div>
             """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+            
+            if a['deadline']:
+                st.markdown(f'<div style="font-size:12px; color:{C.pink}; font-weight:700;">⏳ Deadline: {a["deadline"]}</div>', unsafe_allow_html=True)
+            
+            if a['attachment']:
+                fname = os.path.basename(a['attachment'])
+                st.markdown(f'<div style="font-size:12px; color:{C.sky}; font-weight:600; margin-bottom:10px;">📎 Attachment: {fname}</div>', unsafe_allow_html=True)
+                
+                # Action Buttons side-by-side
+                fname_lower = fname.lower()
+                is_image = any(fname_lower.endswith(ext) for ext in ['.png', '.jpg', '.jpeg'])
+
+                if is_image:
+                    v_col1, v_col2, v_col3 = st.columns(3)
+                    
+                    # 1. Download
+                    with open(a['attachment'], "rb") as f:
+                        v_col1.download_button("📎 Download", f.read(), file_name=fname, key=f"adm_dl_{a['id']}", use_container_width=True)
+                    
+                    # 2. View
+                    v_key = f"adm_view_{a['id']}"
+                    if v_key not in st.session_state: st.session_state[v_key] = False
+                    if v_col2.button("👁️ View", key=f"adm_btn_v_{a['id']}", use_container_width=True):
+                        st.session_state[v_key] = not st.session_state[v_key]
+                        st.rerun()
+                    
+                    # 3. Delete
+                    if v_col3.button("🗑️ Delete", key=f"adm_btn_d_{a['id']}", use_container_width=True, type="secondary"):
+                        if delete_announcement(a['id']):
+                            add_audit_log("admin@gmail.com", "Announcement Deleted", f"Deleted: {a['title']}")
+                            st.rerun()
+                else:
+                    v_col1, v_col2 = st.columns(2)
+                    # 1. Download
+                    with open(a['attachment'], "rb") as f:
+                        v_col1.download_button("📎 Download", f.read(), file_name=fname, key=f"adm_dl_{a['id']}", use_container_width=True)
+                    
+                    # 2. Delete
+                    if v_col2.button("🗑️ Delete", key=f"adm_btn_d_{a['id']}", use_container_width=True, type="secondary"):
+                        if delete_announcement(a['id']):
+                            add_audit_log("admin@gmail.com", "Announcement Deleted", f"Deleted: {a['title']}")
+                            st.rerun()
+            else:
+                # No attachment, just show delete button
+                if st.button("🗑️ Delete Announcement", key=f"adm_btn_d_no_{a['id']}", use_container_width=True, type="secondary"):
+                    if delete_announcement(a['id']):
+                        add_audit_log("admin@gmail.com", "Announcement Deleted", f"Deleted: {a['title']}")
+                        st.rerun()
+
+            # Inline Viewer logic for Admin too
+            v_key = f"adm_view_{a['id']}"
+            if st.session_state.get(v_key):
+                st.markdown('<div style="margin-top:10px; border-top:1px dashed #ccc; padding-top:10px;">', unsafe_allow_html=True)
+                fpath = a['attachment']
+                fname_low = os.path.basename(fpath).lower()
+                try:
+                    if fname_low.endswith(".pdf"):
+                        with open(fpath, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode('utf-8')
+                            st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="500"></iframe>', unsafe_allow_html=True)
+                    elif fname_low.endswith((".png", ".jpg", ".jpeg")):
+                        st.image(fpath, use_container_width=True)
+                except: st.error("Preview failed.")
+                if st.button("✖️ Close Preview", key=f"adm_close_{a['id']}", use_container_width=True):
+                    st.session_state[v_key] = False
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 def _api_monitor():
     st.markdown(f'<div class="pg-card"><h3>Gemini API Usage Monitor</h3>', unsafe_allow_html=True)
@@ -1105,26 +1381,67 @@ def _usage_stats():
     st.markdown("</div>", unsafe_allow_html=True)
 
 def _adm_downloads():
-    st.markdown(f'<div class="pg-card"><h3>Master Download Center</h3><p style="color:{C.t3};font-size:12px;">Access every question paper generated on the system.</p>', unsafe_allow_html=True)
-    f_dept = st.selectbox("Filter by Department", ["All Departments", "Computer Science", "Electronics", "Mechanical"])
+    st.markdown(f'''
+    <div style="background:white; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
+        <h3 style="margin:0; color:{C.t1}; font-size:18px; font-weight:800;">📥 Master Download Archive</h3>
+        <p style="font-size:12.5px; color:{C.t3}; margin-top:4px;">Historical repository of papers previously downloaded from the system.</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Filtering Row
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        search = st.text_input("🔍 Search Paper Title", placeholder="Enter paper name or faculty email...", key="dl_search").strip().lower()
+    with c2:
+        depts = ["All Departments"] + get_distinct_departments()
+        f_dept = st.selectbox("🏢 Filter by Department", depts, key="dl_dept_filter")
+
     papers = get_all_papers_admin()
-    if f_dept != "All Departments":
-        papers = [p for p in papers if p.get('dept') == f_dept]
     
+    # 1. Normalization & Pre-filtering
+    display_papers = []
     for p in papers:
-        st.markdown(f"""
-        <div style="padding:15px; border:1px solid #eee; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:700; color:{C.t1};">{p.get('exam_name')}</div>
-            <div style="font-size:11px; color:{C.t4};">{p.get('user_email')} · {p.get('created_at_raw')}</div>
-          </div>
-          <div style="display:flex; gap:5px;">
-            <button style="padding:4px 10px; font-size:10px; border-radius:4px; border:1px solid {C.sbBd}; cursor:pointer;">PDF</button>
-            <button style="padding:4px 10px; font-size:10px; border-radius:4px; border:1px solid {C.sbBd}; cursor:pointer;">DOCX</button>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        p_norm = _normalize_paper(p)
+        p_norm['db_id'] = p['db_id']
+        p_norm['user_email'] = p['user_email']
+        p_norm['created_at_raw'] = p['created_at_raw']
+        p_norm['status'] = p['approval_status']
+        
+        # Filtering logic: ONLY SHOW DOWNLOADED PAPERS
+        if not p.get('is_downloaded'): continue
+        
+        match_search = not search or (search in p_norm['exam_name'].lower() or search in p_norm['user_email'].lower())
+        match_dept = f_dept == "All Departments" or p_norm['dept'] == f_dept
+        
+        if match_search and match_dept:
+            display_papers.append(p_norm)
+
+    if not display_papers:
+        st.info("No papers match your current filters.")
+        return
+
+    st.markdown(f'<div style="font-size:13px; font-weight:700; color:{C.t4}; margin-bottom:15px; letter-spacing:0.5px;">VIEWING {len(display_papers)} PERSISTENT RECORDS</div>', unsafe_allow_html=True)
+
+    for p in display_papers:
+        with st.container():
+            # Styling for the Paper Card
+            st.markdown(f"""
+            <div style="background:white; border:1px solid {C.sbBd}; border-radius:12px; padding:18px; margin-bottom:12px; box-shadow:{C.cardSh}; transition: transform 0.2s ease;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="flex:1;">
+                        <div style="font-size:15px; font-weight:700; color:{C.t1}; margin-bottom:4px;">{p['exam_name']}</div>
+                        <div style="font-size:11px; color:{C.t3}; font-weight:500;">
+                           👤 {p['user_email']} · 📅 {p['created_at_raw']}
+                        </div>
+                        <div style="margin-top:8px; display:flex; gap:8px;">
+                            <span style="font-size:9.5px; font-weight:800; color:{C.violet}; background:#F4F0FB; padding:2px 10px; border-radius:15px; border:1px solid {C.sbBd};">{p['course_name']}</span>
+                            <span style="font-size:9.5px; font-weight:800; color:{C.t4}; background:{C.pageBg}; padding:2px 10px; border-radius:15px; border:1px solid {C.sbBd};">{p['dept'] or 'No Dept'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('<div style="height:5px;"></div>', unsafe_allow_html=True)
 
 def _security():
     st.markdown(f'<div class="pg-card"><h3>Security & Access Control</h3>', unsafe_allow_html=True)

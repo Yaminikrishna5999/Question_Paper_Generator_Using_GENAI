@@ -61,7 +61,11 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
             message TEXT,
-            type TEXT, -- info, warning, success
+            type TEXT, -- Info, Warning, Update, Event
+            target_type TEXT DEFAULT 'all', -- all, specific
+            target_email TEXT,
+            deadline TEXT,
+            attachment TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -118,6 +122,20 @@ def init_db():
         cursor.execute("ALTER TABLE user_papers ADD COLUMN submission_format TEXT")
     except sqlite3.OperationalError:
         pass
+
+    # --- Migration: Announcements Advanced ---
+    try:
+        cursor.execute("ALTER TABLE announcements ADD COLUMN target_type TEXT DEFAULT 'all'")
+    except sqlite3.OperationalError: pass
+    try:
+        cursor.execute("ALTER TABLE announcements ADD COLUMN target_email TEXT")
+    except sqlite3.OperationalError: pass
+    try:
+        cursor.execute("ALTER TABLE announcements ADD COLUMN deadline TEXT")
+    except sqlite3.OperationalError: pass
+    try:
+        cursor.execute("ALTER TABLE announcements ADD COLUMN attachment TEXT")
+    except sqlite3.OperationalError: pass
 
     # --- Notifications Table ---
     cursor.execute("""
@@ -430,6 +448,14 @@ def mark_notification_read(notif_id):
     conn.close()
     return True
 
+def get_unread_notification_count(email):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM notifications WHERE user_email = ? AND is_read = 0", (email,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
 def get_admin_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -465,18 +491,49 @@ def get_audit_logs(limit=50):
     conn.close()
     return [{"time": l[0], "user": l[1], "action": l[2], "details": l[3]} for l in logs]
 
-def get_announcements():
+def delete_announcement(ann_id):
+    """Delete an announcement by ID."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT title, message, type, created_at FROM announcements ORDER BY created_at DESC")
+    try:
+        cursor.execute("DELETE FROM announcements WHERE id = ?", (ann_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error deleting announcement: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_announcements(user_email=None):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if user_email:
+        cursor.execute("""
+            SELECT id, title, message, type, target_type, target_email, deadline, attachment, created_at 
+            FROM announcements 
+            WHERE target_type = 'all' OR target_email = ?
+            ORDER BY created_at DESC
+        """, (user_email,))
+    else:
+        cursor.execute("""
+            SELECT id, title, message, type, target_type, target_email, deadline, attachment, created_at 
+            FROM announcements 
+            ORDER BY created_at DESC
+        """)
     anns = cursor.fetchall()
     conn.close()
-    return [{"title": a[0], "message": a[1], "type": a[2], "created_at": a[3]} for a in anns]
+    return [{"id": a[0], "title": a[1], "message": a[2], "type": a[3], 
+             "target_type": a[4], "target_email": a[5], "deadline": a[6], 
+             "attachment": a[7], "created_at": a[8]} for a in anns]
 
-def add_announcement(title, message, type):
+def add_announcement(title, message, type, target_type='all', target_email=None, deadline=None, attachment=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO announcements (title, message, type) VALUES (?, ?, ?)", (title, message, type))
+    cursor.execute("""
+        INSERT INTO announcements (title, message, type, target_type, target_email, deadline, attachment) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (title, message, type, target_type, target_email, deadline, attachment))
     conn.commit()
     conn.close()
 
