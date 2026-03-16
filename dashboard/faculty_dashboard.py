@@ -13,7 +13,9 @@ from modules.database import (
     save_paper, get_user_papers, delete_paper, 
     add_audit_log, get_announcements, get_system_settings,
     get_notifications, mark_notification_read, add_notification,
-    submit_paper, delete_announcement
+    submit_paper, delete_announcement, mark_all_notifications_read,
+    mark_announcement_read, get_unread_announcement_count, get_db_raw_data,
+    get_active_now_count
 )
 from modules.auth.env_utils import update_env_key
 
@@ -221,13 +223,13 @@ def _css():
         width:100% !important;
         border-radius:8px !important;
         border:1px solid transparent !important;
-        background:transparent !important;
+        background:#F0EBF8 !important;
         color:{C.t2} !important;
         text-align:left !important;
         justify-content:flex-start !important;
         padding:7px 10px !important;
         font-size:12.5px !important;
-        font-weight:500 !important;
+        font-weight:600 !important;
         line-height:1.2 !important;
         height:36px !important;
         margin:0 0 1px 0 !important;
@@ -237,19 +239,19 @@ def _css():
         gap:8px !important;
     }}
     div.stButton > button:hover{{
-        background:#F0EBF8 !important;
+        background:#E5DEFA !important;
         color:{C.violet} !important;
         border-color:{C.sbBd} !important;
         transform:translateX(3px) !important;
     }}
 
-    /* ── ACTIVE: pink→violet gradient ──
+    /* ── ACTIVE: Dark Violet ──
        Trick: wrap active button in  <div class="nav-on">
        CSS child selector targets only that button           */
     div.nav-on > div.stButton > button,
     div.nav-on > div.stButton > button:hover,
     div.nav-on > div.stButton > button:focus{{
-        background:linear-gradient(135deg,#F72585,#7209B7) !important;
+        background:#7209B7 !important;
         color:#ffffff !important;
         font-weight:700 !important;
         border:none !important;
@@ -259,26 +261,27 @@ def _css():
 
     /* ── Sign-out button ── */
     div.btn-out > div.stButton > button{{
-        background:#FFF0F6 !important;
-        color:{C.pink} !important;
-        border:1px solid #F9C2D9 !important;
-        font-weight:600 !important;
+        background:{C.pink} !important;
+        color:#ffffff !important;
+        border:1px solid {C.pink} !important;
+        font-weight:700 !important;
     }}
     div.btn-out > div.stButton > button:hover{{
-        background:{C.pink} !important;
-        color:#fff !important;
-        border-color:{C.pink} !important;
-        transform:none !important;
+        background:#d81b60 !important;
+        color:#ffffff !important;
+        border-color:#d81b60 !important;
+        transform:translateX(3px) !important;
+        box-shadow: 0 4px 12px rgba(247,37,133,0.2) !important;
     }}
 
     /* ── Sidebar section label ── */
     .sb-lbl{{
-        color:{C.t4};
-        font-size:8px;
-        font-weight:800;
-        letter-spacing:2px;
+        color:{C.t1};
+        font-size:11px;
+        font-weight:900;
+        letter-spacing:1px;
         text-transform:uppercase;
-        padding:14px 12px 4px 12px;
+        padding:20px 12px 8px 12px;
         display:block;
     }}
 
@@ -418,6 +421,23 @@ def _css():
         display: inline-block;
         box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2);
     }}
+
+    /* ── Live Pulse Animation ── */
+    @keyframes pulse {{
+        0% {{ box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }}
+        70% {{ box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }}
+    }}
+    .pulse-dot {{
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: white;
+        border-radius: 50%;
+        margin-left: 8px;
+        vertical-align: middle;
+        animation: pulse 2s infinite;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -477,7 +497,6 @@ def show_v5_faculty_dashboard():
             # Section 6/7: Advanced & Batch
             "randomize": True,
             "avoid_duplicates": True,
-            "include_prev": False,
             "num_sets": 1
         }
     
@@ -533,60 +552,30 @@ def show_v5_faculty_dashboard():
         </div>""", unsafe_allow_html=True)
 
         # Fetch unread count for sidebar
-        from modules.database import get_unread_notification_count, get_announcements
+        from modules.database import get_unread_notification_count, get_unread_announcement_count
         u_email = st.session_state.get("user_data", {}).get("email", "")
         unread_count = get_unread_notification_count(u_email) if u_email else 0
-
-        # Check for recent announcements (last 24 hours) as a "new" indicator
-        recent_anns = get_announcements(user_email=u_email) if u_email else []
-        has_new_ann = False
-        if recent_anns:
-            try:
-                last_ann_time = datetime.strptime(recent_anns[0]['created_at'], "%Y-%m-%d %H:%M:%S")
-                if (datetime.now() - last_ann_time).total_seconds() < 86400: # 24 hours
-                    has_new_ann = True
-            except: pass
 
         # ── Navigation ──
         for section, items in FACULTY_NAV:
             st.markdown(f'<span class="sb-lbl">{section}</span>', unsafe_allow_html=True)
             for icon, label, page_id in items:
-                active  = (st.session_state.v5_page == page_id)
-                
-                # Show red dot if there are unread items
-                show_dot = False
+                # Add notification count to labels
+                display_label = label
                 if page_id == "faculty_alerts" and unread_count > 0:
-                    show_dot = True
-                elif page_id == "announcements_page" and has_new_ann:
-                    show_dot = True
+                    display_label = f"{label} ({unread_count})"
+                
+                active  = (st.session_state.v5_page == page_id)
                 
                 cls     = "nav-on" if active else "nav-off"
                 st.markdown(f'<div class="{cls}" style="padding:1px 9px 0;">', unsafe_allow_html=True)
                 
-                # Create a layout for the button and the dot
-                if show_dot:
-                    st.markdown(f"""
-                    <div class="nav-badge-container">
-                        <div style="flex:1;">
-                    """, unsafe_allow_html=True)
-                    
-                    if st.button(f"{icon}  {label}", key=f"nav_{page_id}", use_container_width=True):
-                        if not active:
-                            st.session_state.v5_page = page_id
-                            st.rerun()
-                            
-                    st.markdown(f"""
-                        </div>
-                        <div class="nav-dot"></div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    if st.button(f"{icon}  {label}", key=f"nav_{page_id}", use_container_width=True):
-                        if not active:
-                            if page_id == "markscheme":
-                                st.session_state.markscheme_paper_id = None
-                            st.session_state.v5_page = page_id
-                            st.rerun()
+                if st.button(f"{icon}  {display_label}", key=f"nav_{page_id}", use_container_width=True):
+                    if not active:
+                        if page_id == "markscheme":
+                            st.session_state.markscheme_paper_id = None
+                        st.session_state.v5_page = page_id
+                        st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
         # ── Sign out ──
@@ -660,33 +649,36 @@ def show_v5_faculty_dashboard():
 # PAGE: DASHBOARD
 # ═══════════════════════════════════════════════════════════════
 def _dash(user):
-    st.markdown(f"""
-    <div class="pg-hero">
-      <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;
-                  color:rgba(255,255,255,0.65);text-transform:uppercase;margin-bottom:5px;">WELCOME BACK</div>
-      <h1 style="font-size:25px;font-weight:800;margin:0 0 8px;">Hello, {user['name']} 👋</h1>
-      <p style="font-size:12.5px;opacity:0.82;max-width:500px;line-height:1.6;margin:0;">
-        Your AI workspace is ready. Generate premium examination papers with Gemini Pro in minutes.
-      </p>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="pg-hero">
+<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.65);text-transform:uppercase;margin-bottom:5px;">WELCOME BACK</div>
+<h1 style="font-size:25px;font-weight:800;margin:0 0 8px;">Hello, {user['name']} 👋</h1>
+<p style="font-size:12.5px;opacity:0.82;max-width:500px;line-height:1.6;margin:0;">
+Your AI workspace is ready. Generate premium examination papers with Gemini Pro in minutes.
+</p>
+</div>""", unsafe_allow_html=True)
+
+    notices_count = len(get_announcements())
+    active_now = get_active_now_count()
 
     k1, k2, k3, k4 = st.columns(4)
     stats = [
         ("📄","My Papers",  len(st.session_state.v5_papers),                   C.gPink,   "rgba(247,37,133,0.2)"),
         ("❓","Questions",  sum(p["qCnt"] for p in st.session_state.v5_papers), C.gViolet, "rgba(114,9,183,0.2)"),
-        ("📥","Downloads",  len(st.session_state.v5_papers),                       C.gSkyBlue,"rgba(76,201,240,0.2)"),
-        ("📢","Notices",    len(SEED_ANNOUNCEMENTS),                             C.gOrange, "rgba(248,150,30,0.2)"),
+        ("✨","Active Now",  active_now,                                         C.gSkyBlue,"rgba(76,201,240,0.2)"),
+        ("📢","Notices",     notices_count,                                      C.gOrange, "rgba(248,150,30,0.2)"),
     ]
     for col, (icon, label, val, grad, glow) in zip([k1,k2,k3,k4], stats):
         with col:
-            st.markdown(f"""
-            <div class="pg-kpi" style="background:{grad};box-shadow:0 5px 15px {glow};">
-              <div style="font-size:19px;">{icon}</div>
-              <div>
-                <div style="font-size:23px;font-weight:800;">{val}</div>
-                <div style="font-size:8.5px;opacity:0.78;font-weight:700;text-transform:uppercase;">{label}</div>
-              </div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="pg-kpi" style="background:{grad};box-shadow:0 5px 15px {glow};">
+<div style="font-size:19px;">{icon}</div>
+<div>
+<div style="font-size:23px;font-weight:800;display:flex;align-items:center;">
+{val}
+{"<span class='pulse-dot'></span>" if label == "Active Now" else ""}
+</div>
+<div style="font-size:8.5px;opacity:0.78;font-weight:700;text-transform:uppercase;">{label}</div>
+</div>
+</div>""", unsafe_allow_html=True)
 
     st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
     c1, c2 = st.columns([2, 1])
@@ -719,59 +711,77 @@ def _dash(user):
                 </div>""", unsafe_allow_html=True)
 
     with c2:
+        # 1. Latest Notice (New Priority)
+        n1, n2 = st.columns([0.82, 0.18])
+        with n1:
+            st.markdown(f'<div style="font-size:14px; font-weight:800; color:{C.t1}; margin-bottom:12px;">📫 Latest Notice</div>', unsafe_allow_html=True)
+        
+        u_email = st.session_state.get("user_data", {}).get("email")
+        anns = get_announcements(user_email=u_email)
+        
+        # Filter out seen notices for the dashboard
+        dismissed = st.session_state.get("v5_dismissed_anns", [])
+        visible_anns = [an for an in anns if an['id'] not in dismissed]
+        
+        if visible_anns:
+            a = visible_anns[0]
+            accent = C.violet if a['type']=='Info' else C.pink if a['type']=='Warning' else C.green
+            
+            # The Card Column
+            nc1, nc2 = st.columns([0.82, 0.18])
+            with nc1:
+                st.markdown(f"""<div style="padding:15px; background:white; border-left:4px solid {accent}; border-radius:8px; box-shadow:{C.cardSh}; position:relative;">
+<div style="font-size:12px; font-weight:800; color:{C.t1}; margin-bottom:5px;">{a['title']}</div>
+<div style="font-size:11px; color:{C.t3}; line-height:1.5;">{a['message'][:80]}...</div>
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+<span style="font-size:9px; background:{C.pageBg}; padding:2px 8px; border-radius:10px; color:{C.t4}; font-weight:700;">{a['type']}</span>
+<span style="font-size:8.5px; color:{C.t4}; font-weight:600;">{a['created_at']}</span>
+</div>
+</div>""", unsafe_allow_html=True)
+            
+            with nc2:
+                # Aligned Eye Button beside the card
+                st.markdown('<div style="height:15px;"></div>', unsafe_allow_html=True) # Vertical shift to center
+                if st.button("👁️", key=f"eye_dash_{a['id']}", help="View and dismiss", use_container_width=True):
+                    if "v5_dismissed_anns" not in st.session_state:
+                        st.session_state.v5_dismissed_anns = []
+                    st.session_state.v5_dismissed_anns.append(a['id'])
+                    st.session_state.v5_page = "announcements_page"
+                    st.rerun()
+        else:
+            st.markdown(f"""<div class="pg-card" style="padding:15px; background:linear-gradient(to right, #ffffff, {C.pageBg}); text-align:center;">
+<div style="font-size:10px; color:{C.t4};">No active announcements</div>
+</div>""", unsafe_allow_html=True)
+
+        st.markdown('<div style="height:25px;"></div>', unsafe_allow_html=True)
+
+        # 2. System Readiness (Moved Down)
         st.markdown(f'<div style="font-size:14px; font-weight:800; color:{C.t1}; margin-bottom:12px;">🛡️ System Readiness</div>', unsafe_allow_html=True)
         
-        # API Status
         api_ok = bool(_get_key())
         api_color = C.green if api_ok else C.pink
         api_ico = "✅" if api_ok else "❌"
         api_txt = "Active & Configured" if api_ok else "Key Required"
         
-        st.markdown(f"""
-        <div class="pg-card" style="padding:15px; margin-bottom:15px; border-left:4px solid {api_color};">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div style="font-size:18px;">{api_ico}</div>
-                <div>
-                    <div style="font-size:11px; font-weight:800; color:{C.t1};">Gemini API Status</div>
-                    <div style="font-size:9px; font-weight:700; color:{api_color};">{api_txt}</div>
-                </div>
-            </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pg-card" style="padding:15px; margin-bottom:15px; border-left:4px solid {api_color};">
+<div style="display:flex; align-items:center; gap:10px;">
+<div style="font-size:18px;">{api_ico}</div>
+<div>
+<div style="font-size:11px; font-weight:800; color:{C.t1};">Gemini API Status</div>
+<div style="font-size:9px; font-weight:700; color:{api_color};">{api_txt}</div>
+</div>
+</div>
+</div>""", unsafe_allow_html=True)
         
-        # Environment Status
-        st.markdown(f"""
-        <div class="pg-card" style="padding:15px; border-left:4px solid {C.sky};">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div style="font-size:18px;">🏗️</div>
-                <div>
-                    <div style="font-size:11px; font-weight:800; color:{C.t1};">Environment</div>
-                    <div style="font-size:9px; font-weight:700; color:{C.t3};">Production v5.0 Stable</div>
-                </div>
-            </div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:14px; font-weight:800; color:{C.t1}; margin-bottom:12px;">📫 Latest Notice</div>', unsafe_allow_html=True)
-        u_email = st.session_state.get("user_data", {}).get("email")
-        anns = get_announcements(user_email=u_email)
-        if anns:
-            a = anns[0]
-            # Simple type mapping for home view
-            accent = C.violet if a['type']=='Info' else C.pink if a['type']=='Warning' else C.green
-            st.markdown(f"""
-            <div style="padding:15px; background:white; border-left:4px solid {accent}; border-radius:8px; box-shadow:{C.cardSh};">
-                <div style="font-size:12px; font-weight:800; color:{C.t1}; margin-bottom:5px;">{a['title']}</div>
-                <div style="font-size:11px; color:{C.t3}; line-height:1.5;">{a['message'][:100]}...</div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                    <span style="font-size:9px; background:{C.pageBg}; padding:2px 8px; border-radius:10px; color:{C.t4}; font-weight:700;">{a['type']}</span>
-                    <span style="font-size:8.5px; color:{C.t4}; font-weight:600;">{a['created_at']}</span>
-                </div>
-            </div>""", unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="pg-card" style="padding:15px; background:linear-gradient(to right, #ffffff, {C.pageBg}); text-align:center;">
-                <div style="font-size:10px; color:{C.t4};">No active announcements</div>
-            </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="pg-card" style="padding:15px; border-left:4px solid {C.sky};">
+<div style="display:flex; align-items:center; gap:10px;">
+<div style="font-size:18px;">🏗️</div>
+<div>
+<div style="font-size:11px; font-weight:800; color:{C.t1};">Environment</div>
+<div style="font-size:9px; font-weight:700; color:{C.t3};">Production v5.0 Stable</div>
+</div>
+</div>
+</div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -795,46 +805,8 @@ def _config():
     cfg = st.session_state.v5_config
     
     # ── Header ──
-    hc1, hc2 = st.columns([1,1])
-    with hc1:
-        st.markdown(f'<div style="font-size:20px;font-weight:800;color:{C.t1};">Question Paper Factory</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:11px;color:{C.t4}; margin-bottom:20px;">Faculty Dashboard • Academic Year: {cfg["academic_year"]}</div>', unsafe_allow_html=True)
-    with hc2:
-        st.markdown('<div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">', unsafe_allow_html=True)
-        if st.button("✨ Reset", use_container_width=False):
-            st.session_state.v5_config = {
-                "exam_name": "",
-                "inst_name": "",
-                "dept": "Select Department",
-                "course_name": "",
-                "course_code": "",
-                "academic_year": "Select Year",
-                "semester": "Select Semester",
-                "exam_type": "Select Type",
-                "exam_date": datetime.now().date(),
-                "duration": "Select Duration",
-                "max_marks": "",
-                "total_questions": 0,
-                "num_sections": 0,
-                "instructions": "",
-                "question_types": [],
-                "marks_per_type": {},
-                "weightage_per_type": {},
-                "counts_per_type": {},
-                "difficulty": "Select Difficulty",
-                "bloom": [],
-                "source_mode": "Select Mode",
-                "topics": [],
-                "file_content": None,
-                "units": [],
-                "unit_dist": {},
-                "randomize": True,
-                "avoid_duplicates": True,
-                "include_prev": False,
-                "num_sets": 0
-            }
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:20px;font-weight:800;color:{C.t1};">Question Paper Factory</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:11px;color:{C.t4}; margin-bottom:20px;">Faculty Dashboard • Academic Year: {cfg["academic_year"]}</div>', unsafe_allow_html=True)
 
     # ── SECTION 1: Basic Exam Details ──
     _sec("Exam Details", "🏛️")
@@ -999,7 +971,6 @@ def _config():
     a1, a2, a3 = st.columns(3)
     cfg["randomize"] = a1.toggle("Question Randomization", value=cfg["randomize"], key="cfg_randomize")
     cfg["avoid_duplicates"] = a2.toggle("Avoid Duplicate Questions", value=cfg["avoid_duplicates"], key="cfg_duplicates")
-    cfg["include_prev"] = a3.toggle("Include Previous Year Questions", value=cfg["include_prev"], key="cfg_prev_yr")
     
     st.divider()
     st.markdown('<div class="cfg-sub-label">Number of Question Paper Sets</div>', unsafe_allow_html=True)
@@ -1456,6 +1427,14 @@ def _faculty_alerts():
 
     # Tabs for Unread/All
     unread = [n for n in notifs if not n["is_read"]]
+    
+    col_t1, col_t2 = st.columns([0.7, 0.3])
+    with col_t2:
+        if unread:
+            if st.button("✔️ Mark All Read", key="at_mark_all", use_container_width=True, help="Clear all notifications"):
+                mark_all_notifications_read(user_email)
+                st.rerun()
+
     t1, t2 = st.tabs([f"New Alerts ({len(unread)})", "Read Notifications"])
     
     with t1:
@@ -1818,37 +1797,34 @@ def _announcements():
     anns = get_announcements(user_email=u_email)
     
     if not anns:
-        st.markdown(f"""
-        <div style="background:{C.pageBg}; border:2px dashed {C.sbBd}; border-radius:15px; padding:40px; text-align:center;">
-            <div style="font-size:40px; margin-bottom:10px;">📭</div>
-            <div style="font-size:14px; color:{C.t4}; font-weight:600;">No active announcements from administration.</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:{C.pageBg}; border:2px dashed {C.sbBd}; border-radius:15px; padding:40px; text-align:center;">
+<div style="font-size:40px; margin-bottom:10px;">📭</div>
+<div style="font-size:14px; color:{C.t4}; font-weight:600;">No active announcements from administration.</div>
+</div>""", unsafe_allow_html=True)
         return
         
     for a in anns:
         accent, bg, bd, ico, tColor = ts.get(a["type"], (C.t4, C.pageBg, C.sbBd, "📢", C.t1))
         
         # Main Card Content with Left Accent Border
-        st.markdown(f"""
-        <div style="background: white; border: 1px solid {bd}; border-left: 5px solid {accent}; border-radius: 12px; padding: 0; margin-bottom: 22px; box-shadow: {C.cardSh}; overflow: hidden; transition: transform 0.2s ease;">
-            <div style="background: {bg}; padding: 12px 20px; border-bottom: 1px solid {bd}; display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="background: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid {bd};">
-                        {ico}
-                    </div>
-                    <span style="background: {accent}; color: white; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">
-                        {a['type']}
-                    </span>
-                </div>
-                <div style="font-size: 10.5px; color: {C.t3}; font-weight: 700; display: flex; align-items: center; gap: 5px;">
-                    <span style="opacity: 0.6;">🕒</span> {a['created_at']}
-                </div>
-            </div>
-            <div style="padding: 24px 20px;">
-                <div style="font-size: 17px; font-weight: 800; color: {C.t1}; margin-bottom: 10px; line-height: 1.3;">{a['title']}</div>
-                <div style="font-size: 13.5px; color: {C.t2}; line-height: 1.6; margin-bottom: 5px;">{a['message']}</div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div style="background: white; border: 1px solid {bd}; border-left: 5px solid {accent}; border-radius: 12px; padding: 0; margin-bottom: 22px; box-shadow: {C.cardSh}; overflow: hidden; transition: transform 0.2s ease;">
+<div style="background: {bg}; padding: 12px 20px; border-bottom: 1px solid {bd}; display: flex; justify-content: space-between; align-items: center;">
+<div style="display: flex; align-items: center; gap: 10px;">
+<div style="background: white; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid {bd};">
+{ico}
+</div>
+<span style="background: {accent}; color: white; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">
+{a['type']}
+</span>
+</div>
+<div style="font-size: 10.5px; color: {C.t3}; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+<span style="opacity: 0.6;">🕒</span> {a['created_at']}
+</div>
+</div>
+<div style="padding: 24px 20px;">
+<div style="font-size: 17px; font-weight: 800; color: {C.t1}; margin-bottom: 10px; line-height: 1.3;">{a['title']}</div>
+<div style="font-size: 13.5px; color: {C.t2}; line-height: 1.6; margin-bottom: 5px;">{a['message']}</div>
+""", unsafe_allow_html=True)
         
         # Action Bar (Deadlines & Attachments)
         if a.get('deadline') or a.get('attachment'):
@@ -1857,13 +1833,11 @@ def _announcements():
             
             with ac1:
                 if a.get('deadline'):
-                    st.markdown(f"""
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="background:{C.pageBg}; padding:6px 12px; border-radius:30px; border:1px solid {C.sbBd};">
-                            <span style="font-size:11px; color:{C.pink}; font-weight:800;">⏳ Submit By: {a['deadline']}</span>
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"""<div style="display:flex; align-items:center; gap:8px;">
+<span style="background:{C.pageBg}; padding:6px 12px; border-radius:30px; border:1px solid {C.sbBd};">
+<span style="font-size:11px; color:{C.pink}; font-weight:800;">⏳ Submit By: {a['deadline']}</span>
+</span>
+</div>""", unsafe_allow_html=True)
             
             with ac2:
                 if a.get('attachment'):
@@ -1909,7 +1883,7 @@ def _announcements():
         # Inline Viewer Section
         v_key = f"view_state_{a['id']}"
         if st.session_state.get(v_key):
-            st.markdown('<div style="margin-top:15px; border-top:1px dashed #d1d5db; padding-top:15px;">', unsafe_allow_html=True)
+            st.markdown('<div style="margin-top:15px; border-top:1px dashed #d1d5db; padding-top:15px;"></div>', unsafe_allow_html=True)
             
             fpath = a['attachment']
             fname = os.path.basename(fpath).lower()

@@ -15,7 +15,8 @@ from modules.database import (
     add_announcement, get_system_settings, update_system_setting,
     get_db_raw_data, get_faculty_metrics, get_distinct_departments,
     update_user_status, update_user_details, add_user, 
-    delete_announcement, add_audit_log, mark_paper_downloaded_admin
+    delete_announcement, add_audit_log, mark_paper_downloaded_admin,
+    get_unread_notification_count
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -144,13 +145,13 @@ def _css():
         width:100% !important;
         border-radius:8px !important;
         border:1px solid transparent !important;
-        background:transparent !important;
+        background:#F0EBF8 !important;
         color:{C.t2} !important;
         text-align:left !important;
         justify-content:flex-start !important;
         padding:7px 10px !important;
         font-size:12.5px !important;
-        font-weight:500 !important;
+        font-weight:600 !important;
         line-height:1.2 !important;
         height:36px !important;
         margin:0 0 1px 0 !important;
@@ -160,34 +161,46 @@ def _css():
         gap:8px !important;
     }}
     div.stButton > button:hover{{
-        background:#F0EBF8 !important;
+        background:#E5DEFA !important;
         color:{C.violet} !important;
         border-color:{C.sbBd} !important;
         transform:translateX(3px) !important;
     }}
 
-    /* ── ACTIVE: light violet matched to screenshot ── */
+    /* ── ACTIVE: Dark Violet matched to Faculty ── */
     div.nav-on > div.stButton > button,
     div.nav-on > div.stButton > button:hover,
     div.nav-on > div.stButton > button:focus{{
-        background:#F0EBF8 !important;
-        color:{C.violet} !important;
+        background:#7209B7 !important;
+        color:#ffffff !important;
         font-weight:700 !important;
         border:none !important;
         transform:none !important;
+        box-shadow:0 3px 10px rgba(114,9,183,0.28) !important;
     }}
 
     /* ── Sidebar section label ── */
     .sb-lbl{{
-        color:{C.t4};
-        font-size:8px;
-        font-weight:800;
-        letter-spacing:2px;
+        color:{C.t1};
+        font-size:11px;
+        font-weight:900;
+        letter-spacing:1px;
         text-transform:uppercase;
-        padding:14px 12px 4px 12px;
+        padding:20px 12px 8px 12px;
         display:block;
     }}
 
+    /* ── Dropdown Hand Cursor ── */
+    div[data-testid="stSelectbox"] {{
+        cursor: pointer !important;
+    }}
+    div[data-testid="stSelectbox"] > div {{
+        cursor: pointer !important;
+    }}
+    div[data-testid="stSelectbox"] * {{
+        cursor: pointer !important;
+    }}
+    
     /* ── Main content ── */
     .main .block-container{{
         background:{C.pageBg};
@@ -254,6 +267,23 @@ def _css():
         display: inline-block;
         box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2);
     }}
+
+    /* ── Live Pulse Animation ── */
+    @keyframes pulse {{
+        0% {{ box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }}
+        70% {{ box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }}
+    }}
+    .pulse-dot {{
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        background: white;
+        border-radius: 50%;
+        margin-left: 8px;
+        vertical-align: middle;
+        animation: pulse 2s infinite;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -307,14 +337,22 @@ def show_v5_admin_dashboard():
                       box-shadow:0 0 0 2px #E8F7EE;flex-shrink:0;"></div>
         </div>""", unsafe_allow_html=True)
 
+        # Fetch unread count for sidebar
+        unread_count = get_unread_notification_count("admin@gmail.com")
+
         for section, items in ADMIN_NAV:
             st.markdown(f'<span class="sb-lbl">{section}</span>', unsafe_allow_html=True)
             for icon, label, page_id in items:
+                # Add notification count to labels
+                display_label = label
+                if page_id == "admin_alerts" and unread_count > 0:
+                    display_label = f"{label} ({unread_count})"
+                
                 active = (st.session_state.admin_page == page_id)
                 
                 cls = "nav-on" if active else "nav-off"
                 st.markdown(f'<div class="{cls}" style="padding:1px 9px 0;">', unsafe_allow_html=True)
-                if st.button(f"{icon}  {label}", key=f"adm_nav_{page_id}", use_container_width=True):
+                if st.button(f"{icon}  {display_label}", key=f"adm_nav_{page_id}", use_container_width=True):
                     if not active:
                         st.session_state.admin_page = page_id
                         st.rerun()
@@ -363,14 +401,13 @@ def show_v5_admin_dashboard():
 
 def _admin_dash():
     # Hero
-    st.markdown(f"""
-    <div class="pg-hero">
-      <div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.65);text-transform:uppercase;margin-bottom:5px;">CONTROL CENTER</div>
-      <h1 style="font-size:25px;font-weight:800;margin:0 0 8px;">Welcome, System Admin 👋</h1>
-      <p style="font-size:12.5px;opacity:0.82;max-width:500px;line-height:1.6;margin:0;">
-        Monitor platform health, faculty activity, and manage system-wide academic resources.
-      </p>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="pg-hero">
+<div style="font-size:9px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.65);text-transform:uppercase;margin-bottom:5px;">CONTROL CENTER</div>
+<h1 style="font-size:25px;font-weight:800;margin:0 0 8px;">Welcome, System Admin 👋</h1>
+<p style="font-size:12.5px;opacity:0.82;max-width:500px;line-height:1.6;margin:0;">
+Monitor platform health, faculty activity, and manage system-wide academic resources.
+</p>
+</div>""", unsafe_allow_html=True)
 
     stats = get_admin_stats()
     k1, k2, k3, k4 = st.columns(4)
@@ -379,19 +416,21 @@ def _admin_dash():
         ("👨‍🏫", "Total Faculty", stats['total_faculty'], C.gPink),
         ("📄", "Total Papers", stats['total_papers'], C.gViolet),
         ("📅", "Generated Today", stats['today_papers'], C.gSkyBlue),
-        ("✨", "Active Now", "4", C.gOrange),
+        ("✨", "Active Now", stats['active_now'], C.gOrange),
     ]
     
     for col, (icon, label, val, grad) in zip([k1,k2,k3,k4], kpis):
         with col:
-            st.markdown(f"""
-            <div class="pg-kpi" style="background:{grad};">
-              <div style="font-size:19px;">{icon}</div>
-              <div>
-                <div style="font-size:23px;font-weight:800;">{val}</div>
-                <div style="font-size:8.5px;opacity:0.78;font-weight:700;text-transform:uppercase;">{label}</div>
-              </div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class="pg-kpi" style="background:{grad};">
+<div style="font-size:19px;">{icon}</div>
+<div>
+<div style="font-size:23px;font-weight:800;display:flex;align-items:center;">
+{val}
+{"<span class='pulse-dot'></span>" if label == "Active Now" else ""}
+</div>
+<div style="font-size:8.5px;opacity:0.78;font-weight:700;text-transform:uppercase;">{label}</div>
+</div>
+</div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -519,11 +558,12 @@ def _fac_mgt():
         with st.form("add_faculty_form"):
             st.markdown(f'<div style="font-size:14px; font-weight:700; color:{C.t1}; margin-bottom:10px;">Register New Faculty Account</div>', unsafe_allow_html=True)
             ac1, ac2 = st.columns(2)
-            f_name = ac1.text_input("Faculty Name")
-            f_email = ac2.text_input("Email Address")
+            f_name = ac1.text_input("Faculty Name", placeholder="Enter Faculty Name")
+            f_email = ac2.text_input("Email Address", placeholder="Enter Email Address")
             
             ac3, ac4 = st.columns(2)
             f_depts = [
+                "Select Department",
                 "Computer Science and Engineering (CSE)",
                 "Information Technology (IT)",
                 "Electronics and Communication Engineering (ECE)",
@@ -536,14 +576,16 @@ def _fac_mgt():
                 "Data Science"
             ]
             f_dept = ac3.selectbox("Department", f_depts)
-            f_desig = ac4.selectbox("Role / Designation", ["Professor", "Associate Professor", "Assistant Professor", "HOD", "Visiting Faculty", "Lecturer"])
+            f_desig = ac4.selectbox("Role / Designation", ["Select Role", "Professor", "Associate Professor", "Assistant Professor", "HOD", "Visiting Faculty", "Lecturer"])
             
             f_subjects = st.text_input("Subjects Assigned (comma separated)", placeholder="e.g. Data Structures, Algorithms")
-            f_pass = st.text_input("Initial Password", type="password", value="Faculty@123")
+            f_pass = st.text_input("Initial Password", type="password", placeholder="Enter Initial Password", value="")
             
             f1, f2, f3 = st.columns([1.2, 1.2, 3])
             if f1.form_submit_button("Add Faculty", type="primary"):
-                if f_name and f_email and f_pass:
+                if f_dept == "Select Department" or f_desig == "Select Role":
+                    st.error("Please select a valid Department and Role.")
+                elif f_name and f_email and f_pass:
                     from modules.database import add_user
                     success, msg = add_user(f_name, f_email, f_dept, f_desig, f_pass, subjects=f_subjects)
                     if success:
@@ -1593,6 +1635,17 @@ def _admin_alerts():
         return
 
     unread = [n for n in notifs if not n["is_read"]]
+    
+    col_t1, col_t2 = st.columns([0.7, 0.3])
+    with col_t1:
+         st.markdown(f'<div style="font-size:12px; color:{C.t3}; margin-bottom:10px;">Showing {len(unread)} unread alerts.</div>', unsafe_allow_html=True)
+    with col_t2:
+        if unread:
+            from modules.database import mark_all_notifications_read
+            if st.button("✔️ Mark All Read", key="adm_mark_all", use_container_width=True):
+                mark_all_notifications_read("admin@gmail.com")
+                st.rerun()
+
     t1, t2 = st.tabs([f"New Alerts ({len(unread)})", "Broadcast History"])
     
     with t1:

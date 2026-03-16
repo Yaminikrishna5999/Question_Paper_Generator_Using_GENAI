@@ -154,6 +154,17 @@ def init_db():
         )
     """)
     
+    # --- Announcement Reads Table ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS announcement_reads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT NOT NULL,
+            announcement_id INTEGER NOT NULL,
+            read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_email, announcement_id)
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -462,6 +473,14 @@ def mark_notification_read(notif_id):
     conn.close()
     return True
 
+def mark_all_notifications_read(email):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE notifications SET is_read = 1 WHERE user_email = ?", (email,))
+    conn.commit()
+    conn.close()
+    return True
+
 def get_unread_notification_count(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -483,12 +502,32 @@ def get_admin_stats():
     cursor.execute("SELECT COUNT(*) FROM user_papers WHERE date(created_at) = date('now')")
     today_papers = cursor.fetchone()[0]
     
+    active_now = get_active_now_count()
+    
     conn.close()
     return {
         "total_faculty": total_faculty,
         "total_papers": total_papers,
-        "today_papers": today_papers
+        "today_papers": today_papers,
+        "active_now": active_now
     }
+
+def get_active_now_count(minutes=15):
+    """Calculate unique users active within the last X minutes based on audit logs."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # SQLite CURRENT_TIMESTAMP is UTC. 
+    # We check for users who performed any action in the last X minutes.
+    cursor.execute("""
+        SELECT COUNT(DISTINCT user_email) 
+        FROM audit_logs 
+        WHERE timestamp >= datetime('now', ?)
+    """, (f'-{minutes} minutes',))
+    
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count if count > 0 else 1 # Minimum 1 (the current user)
 
 def add_audit_log(email, action, details):
     conn = sqlite3.connect(DB_PATH)
@@ -540,6 +579,34 @@ def get_announcements(user_email=None):
     return [{"id": a[0], "title": a[1], "message": a[2], "type": a[3], 
              "target_type": a[4], "target_email": a[5], "deadline": a[6], 
              "attachment": a[7], "created_at": a[8]} for a in anns]
+
+def mark_announcement_read(email, ann_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO announcement_reads (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
+        conn.commit()
+        return True
+    except:
+        return False
+    finally:
+        conn.close()
+
+def get_unread_announcement_count(email):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    # Announcements where target is 'all' or matches email, AND NOT in announcement_reads for this email
+    cursor.execute("""
+        SELECT COUNT(*) FROM announcements a
+        WHERE (a.target_type = 'all' OR a.target_email = ?)
+        AND NOT EXISTS (
+            SELECT 1 FROM announcement_reads ar 
+            WHERE ar.user_email = ? AND ar.announcement_id = a.id
+        )
+    """, (email, email))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
 
 def add_announcement(title, message, type, target_type='all', target_email=None, deadline=None, attachment=None):
     conn = sqlite3.connect(DB_PATH)

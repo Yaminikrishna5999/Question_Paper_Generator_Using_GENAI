@@ -231,18 +231,22 @@ if not st.session_state.logged_in:
     inject_global_auth_styles()
     
     # The brand header stays outside the main form container
+    mode = st.session_state.auth_tab
+    logo_bg = C.facIconGrad if mode == 'faculty' else C.admIconGrad
+    logo_svg = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>' if mode == 'faculty' else '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>'
+    
     st.markdown(f"""
     <div style="text-align:center; margin-bottom:10px;">
-        <div style="width:64px; height:64px; border-radius:18px; background:{C.gPinkVio if st.session_state.auth_tab == 'faculty' else C.gAdmin}; 
+        <div style="width:64px; height:64px; border-radius:18px; background:{logo_bg}; 
              display:inline-flex; align-items:center; justify-content:center; 
-             font-size:28px; margin-bottom:12px; box-shadow: 0 8px 25px rgba(0,0,0,0.15);">
-             { "📋" if st.session_state.auth_screen == 'login' and st.session_state.auth_tab == 'faculty' else "🛡️" if st.session_state.auth_screen == 'login' else "📝" }
+             margin-bottom:12px; box-shadow: 0 8px 25px rgba(0,0,0,0.15);">
+             {logo_svg}
         </div>
-        <h1 style="font-size:26px; font-weight:800; color:{C.t1}; letter-spacing:-0.8px; margin-bottom:2px;">
+        <h1 style="font-size:26px; font-weight:700; color:{C.tTitle}; margin-bottom:4px;">
             PaperGen AI
         </h1>
-        <p style="font-size:13px; color:{C.t4}; font-weight:500; margin-bottom:0;">
-            AI-Powered Examination System · v6.0
+        <p style="font-size:12px; color:{C.tSub}; font-weight:500; margin-bottom:0;">
+            AI-Powered Examination System
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -265,9 +269,9 @@ if not st.session_state.logged_in:
             else:
                 show_admin_login()
         
-    st.markdown(f"""
-    <p style="text-align:center; font-size:11px; color:{C.t5}; margin-top:18px;">
-      PaperGen AI v6.0 · AI & NLP Final Year Project
+    st.markdown("""
+    <p style="text-align:center; font-size:11px; color:#b0aac8; margin-top:18px; font-weight:500;">
+      PaperGen AI · AI & NLP Final Year Project
     </p>
     """, unsafe_allow_html=True)
     st.stop()
