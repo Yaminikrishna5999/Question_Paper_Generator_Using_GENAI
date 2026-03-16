@@ -18,7 +18,8 @@ from modules.database import (
     update_system_setting, get_faculty_metrics, get_distinct_departments,
     delete_announcement, add_audit_log, mark_paper_downloaded_admin,
     get_unread_notification_count, delete_paper_admin, restore_paper, get_paper_owner_email,
-    clear_old_audit_logs
+    clear_old_audit_logs,
+    add_notification
 )
 
 # ═══════════════════════════════════════════════════════════════

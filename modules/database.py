@@ -209,7 +209,7 @@ def add_user(full_name, email, department, designation, password, role="faculty"
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (full_name, email, department, designation, hashed_pass, role, "Active", subjects))
         conn.commit()
-    st.cache_data.clear()
+        st.cache_data.clear()
         return True, "Registration successful"
     except sqlite3.IntegrityError:
         return False, "Email already registered"
@@ -700,7 +700,7 @@ def delete_announcement(ann_id):
     try:
         cursor.execute("UPDATE announcements SET admin_deleted = 1 WHERE id = ?", (ann_id,))
         conn.commit()
-    st.cache_data.clear()
+        st.cache_data.clear()
         return True
     except Exception as e:
         print(f"Error deleting announcement: {e}")
@@ -715,7 +715,7 @@ def delete_announcement_faculty(email, ann_id):
     try:
         cursor.execute("INSERT OR IGNORE INTO faculty_announcement_deletions (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
         conn.commit()
-    st.cache_data.clear()
+        st.cache_data.clear()
         return True
     except:
         return False
@@ -755,7 +755,7 @@ def mark_announcement_read(email, ann_id):
     try:
         cursor.execute("INSERT OR IGNORE INTO announcement_reads (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
         conn.commit()
-    st.cache_data.clear()
+        st.cache_data.clear()
         return True
     except:
         return False
