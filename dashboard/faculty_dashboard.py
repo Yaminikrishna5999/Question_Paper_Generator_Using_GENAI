@@ -15,7 +15,8 @@ from modules.database import (
     get_notifications, mark_notification_read, add_notification,
     submit_paper, delete_announcement, mark_all_notifications_read,
     mark_announcement_read, get_unread_announcement_count, get_db_raw_data,
-    get_active_now_count
+    get_active_now_count, delete_announcement_faculty, request_paper_recovery,
+    permanently_delete_paper_faculty
 )
 from modules.auth.env_utils import update_env_key
 
@@ -133,13 +134,13 @@ FACULTY_NAV = [
 # ═══════════════════════════════════════════════════════════════
 # UTILS
 # ═══════════════════════════════════════════════════════════════
-def _track_dl(dtype, pname, db_id=None):
+def _track_dl(dtype, pname, status, db_id=None):
     if "v5_downloads" not in st.session_state:
         st.session_state.v5_downloads = 0
     st.session_state.v5_downloads += 1
     user_email = st.session_state.get("user_data", {}).get("email", "unknown")
     add_audit_log(user_email, "Download", f"Downloaded {dtype}: {pname}")
-    if db_id:
+    if db_id and status != "Pending":
         from modules.database import mark_paper_downloaded
         mark_paper_downloaded(db_id)
 
@@ -1150,155 +1151,198 @@ def _run_generation(cfg):
         st.info("If the error mentions 'API key not valid', please update your key in the **Settings** tab and click 'Save & Validate'.")
 
 def _papers():
-    """Display generated papers with Section 9 Download Options."""
-    papers = st.session_state.get("v5_papers", [])
-    if not papers:
-        st.warning("No papers available. Use the configuration panel to generate sets.")
-        if st.button("Go to Configuration"):
-            st.session_state.v5_page = "configuration"
-            st.rerun()
-        return
-
-    st.markdown(f'<div style="font-size:16px; font-weight:700; color:{C.t1}; margin-bottom:15px;">Generated Exam Papers repository</div>', unsafe_allow_html=True)
+    """Display generated papers with Active and Removed views."""
+    st.markdown(f'<div style="font-size:16px; font-weight:700; color:{C.t1}; margin-bottom:15px;">Exam Papers repository</div>', unsafe_allow_html=True)
     
-    for p in papers:
-        # Normalize for Export Handler
-        p_norm = _normalize_paper(p)
-        
-        # Move timestamp to top level for better visibility
-        created_at = p.get('created_at', p.get('date', 'Unknown Time'))
-        expander_label = f"📄 {p['name']} | 🕒 {created_at} | {p['qCnt']} Qs — {p['mks']} Marks"
-        
-        # Auto-expand logic if jumping from notification
-        is_jump = st.session_state.get("jump_to_paper") == p['id']
-        if is_jump:
-            expanded_state = True
-            # We don't clear it here yet to ensure it persists for the actual render
+    tab1, tab2 = st.tabs(["📄 Active Papers", "🗑️ Removed Papers"])
+    
+    with tab1:
+        papers = st.session_state.get("v5_papers", [])
+        if not papers:
+            st.warning("No papers available. Use the configuration panel to generate sets.")
+            if st.button("Go to Configuration"):
+                st.session_state.v5_page = "configuration"
+                st.rerun()
         else:
-            expanded_state = False
-
-        with st.expander(expander_label, expanded=expanded_state):
-            if is_jump:
-                # Clear it inside so it only happens once
-                st.session_state.jump_to_paper = None
-            # --- APPROVAL WORKFLOW STATUS ---
-            status = p.get("approval_status", "Pending")
-            comments = p.get("admin_comments", "")
-            
-            # ALLOW downloads for Drafts (Pending) and Approved papers
-            is_downloadable = (status == "Pending" or status == "Approved")
-            
-            st_colors = {
-                "Pending": ("#F1F5F9", "#475569", "#E2E8F0"), # Neutral color for DRAFT
-                "Submitted": ("#FEF3C7", "#92400E", "#FDE68A"),
-                "Approved": ("#D1FAE5", "#065F46", "#A7F3D0"),
-                "Changes Requested": ("#FFedd5", "#9a3412", "#fed7aa")
-            }
-            bg, fg, bd = st_colors.get(status, st_colors["Pending"])
-            p_status_lbl = "DRAFT" if status == "Pending" else status.upper()
-            
-            st.markdown(f"""
-            <div style="background:{bg}; color:{fg}; border:1px solid {bd}; padding:4px 12px; 
-                        border-radius:6px; font-size:11px; font-weight:800; display:inline-block; margin-bottom:12px;">
-                STATUS: {p_status_lbl}
-            </div>""", unsafe_allow_html=True)
-            
-            if comments:
-                st.info(f"💬 **Admin Feedback:** {comments}")
-            
-            # Show warning ONLY if it's actually with the admin (Submitted or Changes Requested)
-            if status in ["Submitted", "Changes Requested"]:
-                st.warning("⚠️ This paper is awaiting admin approval. Downloads are disabled until it is approved.")
-
-            st.markdown(f"""
-            <div style="margin-bottom:12px; padding: 4px 2px;">
-                <div style="font-size:12.5px; color:{C.t1}; margin-bottom: 2px;"><b>{p.get('inst_name','')}</b></div>
-                <div style="font-size:11.5px; color:{C.t3}; opacity: 0.8;">{p.get('course_name','')} ({p.get('course_code','')}) • {p.get('department','')}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-            with c1:
-                if st.button(f"👁️ Preview Set {p['set']}", key=f"prev_set_{p['id']}", use_container_width=True):
-                    st.session_state.preview_paper_id = p['id']
-                    st.session_state.v5_page = "preview"
-                    st.rerun()
-            
-            # SECTION 9: DOWNLOAD OPTIONS (Restricted)
-            with c2:
-                try:
-                    pdf_path = ExportHandler.export_to_pdf(p_norm, f"Set_{p['set']}_{p['id']}.pdf")
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(f"📕 PDF (Set {p['set']})", f, file_name=f"Set_{p['set']}.pdf", 
-                                          key=f"pdf_{p['id']}", use_container_width=True, 
-                                          on_click=_track_dl, args=("PDF", p['name'], p.get('db_id')),
-                                          disabled=not is_downloadable)
-                except:
-                    st.button("PDF Error", disabled=True, key=f"pe_{p['id']}")
+            for p in papers:
+                p_norm = _normalize_paper(p)
+                p_id = p.get('db_id', p.get('id', 'unknown'))
+                created_at = p.get('created_at', p.get('date', 'Unknown Time'))
+                expander_label = f"📄 {p['name']} | 🕒 {created_at} | {p['qCnt']} Qs — {p['mks']} Marks"
                 
-            with c3:
-                try:
-                    docx_path = ExportHandler.export_to_docx(p_norm, f"Set_{p['set']}_{p['id']}.docx")
-                    with open(docx_path, "rb") as f:
-                        st.download_button(f"📘 DOCX (Set {p['set']})", f, file_name=f"Set_{p['set']}.docx", 
-                                          key=f"doc_{p['id']}", use_container_width=True, 
-                                          on_click=_track_dl, args=("DOCX", p['name'], p.get('db_id')),
-                                          disabled=not is_downloadable)
-                except:
-                    st.button("DOCX Error", disabled=True, key=f"de_{p['id']}")
- 
-            with c4:
-                txt_data = ExportHandler._to_txt(p_norm)
-                st.download_button(f"📄 TXT (Set {p['set']})", txt_data, file_name=f"Set_{p['set']}.txt", 
-                                  key=f"txt_{p['id']}", use_container_width=True, 
-                                  on_click=_track_dl, args=("TXT", p['name'], p.get('db_id')),
-                                  disabled=not is_downloadable)
+                jump_val = st.session_state.get("jump_to_paper")
+                is_jump = (jump_val == p_id) or (p.get('id') is not None and jump_val == p.get('id'))
+                expanded_state = True if is_jump else False
 
-            # --- SUBMISSION AND DELETE ACTIONS ---
-            st.markdown("<hr style='margin:15px 0; opacity:0.3;'>", unsafe_allow_html=True)
-            act_col1, act_col2 = st.columns([1, 1])
-            
-            with act_col1:
-                if status in ["Pending", "Changes Requested"]:
-                    btn_col1, btn_col2 = st.columns([1, 1])
-                    with btn_col1:
-                        if st.button(f"📤 Send to Admin (Set {p['set']})", key=f"send_adm_{p['id']}", use_container_width=True):
-                            st.session_state[f"show_sub_{p['id']}"] = True
-                    with btn_col2:
-                        if st.button(f"📋 Marks Schema (Set {p['set']})", key=f"ms_trig_{p['id']}", use_container_width=True):
-                            st.session_state.markscheme_paper_id = p['id']
-                            st.session_state.v5_page = "markscheme"
+                with st.expander(expander_label, expanded=expanded_state):
+                    if is_jump: st.session_state.jump_to_paper = None
+                    
+                    status = p.get("approval_status", "Pending")
+                    comments = p.get("admin_comments", "")
+                    is_downloadable = (status == "Pending" or status == "Approved")
+                    
+                    st_colors = {
+                        "Pending": ("#F1F5F9", "#475569", "#E2E8F0"),
+                        "Submitted": ("#FEF3C7", "#92400E", "#FDE68A"),
+                        "Approved": ("#D1FAE5", "#065F46", "#A7F3D0"),
+                        "Changes Requested": ("#FFedd5", "#9a3412", "#fed7aa")
+                    }
+                    bg, fg, bd = st_colors.get(status, st_colors["Pending"])
+                    p_status_lbl = "DRAFT" if status == "Pending" else status.upper()
+                    
+                    st.markdown(f"""
+                    <div style="background:{bg}; color:{fg}; border:1px solid {bd}; padding:4px 12px; 
+                                border-radius:6px; font-size:11px; font-weight:800; display:inline-block; margin-bottom:12px;">
+                        STATUS: {p_status_lbl}
+                    </div>""", unsafe_allow_html=True)
+                    
+                    if comments: st.info(f"💬 **Admin Feedback:** {comments}")
+                    if status in ["Submitted", "Changes Requested"]:
+                        st.warning("⚠️ This paper is awaiting admin approval. Downloads are disabled.")
+
+                    st.markdown(f"""
+                    <div style="margin-bottom:12px; padding: 4px 2px;">
+                        <div style="font-size:12.5px; color:{C.t1}; margin-bottom: 2px;"><b>{p.get('inst_name','')}</b></div>
+                        <div style="font-size:11.5px; color:{C.t3}; opacity: 0.8;">{p.get('course_name','')} ({p.get('course_code','')}) • {p.get('department','')}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
+                    with c1:
+                        if st.button(f"👁️ Preview Set {p['set']}", key=f"prev_set_{p_id}", use_container_width=True):
+                            st.session_state.preview_paper_id = p_id
+                            st.session_state.v5_page = "preview"
                             st.rerun()
                     
-                    if st.session_state.get(f"show_sub_{p['id']}"):
-                        with st.form(key=f"form_sub_{p['id']}"):
-                            fmt = st.selectbox("Preferred Format for Review", ["PDF", "DOCX", "TXT"], key=f"fmt_sub_{p['id']}")
-                            if st.form_submit_button("Confirm Submission", use_container_width=True):
-                                if "db_id" in p:
-                                    from modules.database import submit_paper, add_notification
-                                    submit_paper(p["db_id"], fmt)
-                                    # Notify Admin
-                                    username = st.session_state.get("user_data", {}).get("name", "A Faculty Member")
-                                    admin_msg = f"🔔 **{username}** has sent a paper (**{p['name']}**) for review in **{fmt}** format."
-                                    add_notification("admin@gmail.com", admin_msg, p["db_id"])
-                                    add_audit_log(st.session_state.get("user_data", {}).get("email", ""), "Paper Submitted", f"Submitted {p['name']} in {fmt}")
-                                    st.success("Paper submitted to Admin successfully!")
-                                    del st.session_state[f"show_sub_{p['id']}"]
-                                    time.sleep(1)
-                                    st.rerun()
-                else:
-                    st.button("✅ Already Submitted", disabled=True, use_container_width=True, key=f"sent_dis_{p['id']}")
+                    with c2:
+                        try:
+                            pdf_bytes = ExportHandler.export_to_pdf(p_norm, to_bytes=True)
+                            st.download_button(f"📕 PDF (Set {p['set']})", pdf_bytes, file_name=f"Set_{p['set']}.pdf", 
+                                              key=f"pdf_{p_id}", use_container_width=True, 
+                                              on_click=_track_dl,
+                                              args=("PDF", p['name'], status, p.get('db_id')),
+                                              disabled=not is_downloadable)
+                        except: st.button("PDF Error", disabled=True, key=f"pe_{p_id}")
+                        
+                    with c3:
+                        try:
+                            docx_bytes = ExportHandler.export_to_docx(p_norm, to_bytes=True)
+                            st.download_button(f"📘 DOCX (Set {p['set']})", docx_bytes, file_name=f"Set_{p['set']}.docx", 
+                                              key=f"doc_{p_id}", use_container_width=True, 
+                                              on_click=_track_dl,
+                                              args=("DOCX", p['name'], status, p.get('db_id')),
+                                              disabled=not is_downloadable)
+                        except: st.button("DOCX Error", disabled=True, key=f"de_{p_id}")
+         
+                    with c4:
+                        txt_data = ExportHandler._to_txt(p_norm)
+                        st.download_button(f"📄 TXT (Set {p['set']})", txt_data, file_name=f"Set_{p['set']}.txt", 
+                                          key=f"txt_{p_id}", use_container_width=True, 
+                                          on_click=_track_dl,
+                                          args=("TXT", p['name'], status, p.get('db_id')),
+                                          disabled=not is_downloadable)
 
-            with act_col2:
-                if st.button(f"🗑️ Delete (Set {p['set']})", key=f"del_{p['id']}", type="primary", use_container_width=True):
-                    if "db_id" in p:
-                        user_email = st.session_state.get("user_data", {}).get("email", "")
-                        from modules.database import delete_paper
-                        delete_paper(p["db_id"], user_email)
-                        add_audit_log(user_email, "Paper Deleted", f"Deleted {p['name']}")
-                    if p in st.session_state.v5_papers:
-                        st.session_state.v5_papers.remove(p)
-                    st.rerun()
+                    st.markdown("<hr style='margin:15px 0; opacity:0.3;'>", unsafe_allow_html=True)
+                    act_col1, act_col2 = st.columns([1, 1])
+                    
+                    with act_col1:
+                        if status in ["Pending", "Changes Requested"]:
+                            btn_col1, btn_col2 = st.columns([1, 1])
+                            with btn_col1:
+                                if st.button(f"📤 Send to Admin (Set {p['set']})", key=f"send_adm_{p_id}", use_container_width=True):
+                                    st.session_state[f"show_sub_{p_id}"] = True
+                            with btn_col2:
+                                if st.button(f"📋 Marks Schema (Set {p['set']})", key=f"ms_trig_{p_id}", use_container_width=True):
+                                    st.session_state.markscheme_paper_id = p_id
+                                    st.session_state.v5_page = "markscheme"
+                                    st.rerun()
+                            
+                            if st.session_state.get(f"show_sub_{p_id}"):
+                                with st.form(key=f"form_sub_{p_id}"):
+                                    fmt = st.selectbox("Preferred Format for Review", ["PDF", "DOCX", "TXT"], key=f"fmt_sub_{p_id}")
+                                    if st.form_submit_button("Confirm Submission", use_container_width=True):
+                                        if "db_id" in p:
+                                            submit_paper(p["db_id"], fmt)
+                                            username = st.session_state.get("user_data", {}).get("name", "A Faculty Member")
+                                            admin_msg = f"🔔 **{username}** has sent a paper (**{p['name']}**) for review."
+                                            add_notification("admin@gmail.com", admin_msg, p["db_id"])
+                                            add_audit_log(st.session_state.get("user_data", {}).get("email", ""), "Paper Submitted", f"Submitted {p['name']}")
+                                            st.success("Paper submitted to Admin!")
+                                            del st.session_state[f"show_sub_{p_id}"]
+                                            time.sleep(1); st.rerun()
+                        else:
+                            st.button("✅ Already Submitted", disabled=True, use_container_width=True, key=f"sent_dis_{p_id}")
+
+                    with act_col2:
+                        if st.button(f"🗑️ Remove (Set {p['set']})", key=f"del_{p_id}", type="primary", use_container_width=True):
+                            if "db_id" in p:
+                                user_email = st.session_state.get("user_data", {}).get("email", "")
+                                delete_paper(p["db_id"], user_email)
+                                add_audit_log(user_email, "Paper Removed", f"Removed {p['name']}")
+                            if p in st.session_state.v5_papers:
+                                st.session_state.v5_papers.remove(p)
+                            st.rerun()
+
+    with tab2:
+        user_email = st.session_state.get("user_data", {}).get("email", "")
+        removed_papers = get_user_papers(user_email, include_deleted=True)
+        
+        if not removed_papers:
+            st.info("Your trash is empty. Papers you remove will appear here temporarily.")
+        else:
+            st.markdown('<div style="margin-bottom:15px; font-size:12px; color:#666;">You can request the Admin to restore these papers if removed accidentally.</div>', unsafe_allow_html=True)
+            for rp in removed_papers:
+                p_id = rp.get("db_id", rp.get("id", "Unknown"))
+                try:
+                    name = rp.get("name", rp.get("exam_name", f"Paper #{p_id}"))
+                    created = rp.get("created_at", rp.get("date", "Unknown"))
+                    is_requested = rp.get("recovery_requested", False)
+                    
+                    # TRUE SINGLE ROW LAYOUT (Flat columns, no nesting)
+                    c_info, c_rec, c_purg = st.columns([0.5, 0.25, 0.25])
+                    
+                    with c_info:
+                        st.markdown(f"""
+                        <div style="padding:8px 15px; background:white; border:1px solid #eee; border-radius:8px; border-left:4px solid {C.orange if not is_requested else C.t4}; height:60px; display:flex; flex-direction:column; justify-content:center;">
+                            <div style="font-size:14px; font-weight:700; color:{C.t1}; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; line-height:1.2;">{name}</div>
+                            <div style="font-size:10.5px; color:{C.t3}; opacity:0.8; margin-top:2px;">Removed on: {created}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    if is_requested:
+                        with c_rec:
+                            st.markdown(f"""
+                            <div style="height:60px; display:flex; align-items:center; justify-content:center; 
+                                        background:#F1F5F9; border-radius:8px; border:1px dashed #CBD5E1;">
+                                <span style="font-size:11px; color:#475569; font-weight:600; text-align:center;">
+                                    ⏳ Request Sent
+                                </span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with c_purg:
+                            # Still allow purge even if requested? Yes, if they want to cancel request by purging.
+                            if st.button("🗑️ Purge", key=f"purg_{p_id}", use_container_width=True, help="Permanently remove from trash"):
+                                permanently_delete_paper_faculty(p_id, user_email)
+                                add_audit_log(user_email, "Paper Purged", f"Permanently deleted {name} from trash")
+                                st.rerun()
+                    else:
+                        with c_rec:
+                            if st.button("♻️ Recover", key=f"req_rec_{p_id}", use_container_width=True, help="Request Admin to restore this paper"):
+                                request_paper_recovery(p_id)
+                                username = st.session_state.get("user_data", {}).get("name", "Faculty")
+                                rec_msg = f"🆘 **RECOVERY REQUEST**: {username} wants to restore: **{name}** (ID: {p_id})"
+                                add_notification("admin@gmail.com", rec_msg, p_id)
+                                st.success("Request sent!")
+                                time.sleep(0.5); st.rerun()
+                        with c_purg:
+                            if st.button("🗑️ Purge", key=f"purg_{p_id}", use_container_width=True, help="Permanently remove from trash"):
+                                permanently_delete_paper_faculty(p_id, user_email)
+                                add_audit_log(user_email, "Paper Purged", f"Permanently deleted {name} from trash")
+                                st.rerun()
+                    
+                    st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Error loading Paper #{p_id}: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1844,41 +1888,35 @@ def _announcements():
                     fpath = a['attachment']
                     if os.path.exists(fpath):
                         fname_lower = os.path.basename(fpath).lower()
-                        is_image = any(fname_lower.endswith(ext) for ext in ['.png', '.jpg', '.jpeg'])
+                        is_viewable = any(fname_lower.endswith(ext) for ext in ['.pdf', '.png', '.jpg', '.jpeg'])
                         
-                        if is_image:
-                            v_col1, v_col2 = st.columns(2)
-                            
-                            # 1. Download Button
-                            with open(fpath, "rb") as f:
-                                data = f.read()
-                                v_col1.download_button(
-                                    label="📎 Download",
-                                    data=data,
-                                    file_name=os.path.basename(fpath),
-                                    key=f"dl_pg_{a['id']}",
-                                    use_container_width=True
-                                )
-                            
-                            # 2. View Toggle Button
+                        # Dynamic layout based on whether "View" is available
+                        cols = st.columns(3 if is_viewable else 2)
+                        
+                        # 1. Download
+                        with open(fpath, "rb") as f:
+                            cols[0].download_button("📎 Download", f.read(), os.path.basename(fpath), key=f"dl_pg_{a['id']}", use_container_width=True)
+                        
+                        # 2. View (Optional)
+                        cur_idx = 1
+                        if is_viewable:
                             v_key = f"view_state_{a['id']}"
-                            if v_key not in st.session_state:
-                                st.session_state[v_key] = False
-                                
-                            if v_col2.button("👁️ View", key=f"btn_v_{a['id']}", use_container_width=True):
+                            if v_key not in st.session_state: st.session_state[v_key] = False
+                            if cols[cur_idx].button("👁️ View", key=f"btn_v_{a['id']}", use_container_width=True):
                                 st.session_state[v_key] = not st.session_state[v_key]
                                 st.rerun()
-                        else:
-                            # 1. Download Only for PDF/Word
-                            with open(fpath, "rb") as f:
-                                data = f.read()
-                                st.download_button(
-                                    label="📎 Download Attachment",
-                                    data=data,
-                                    file_name=os.path.basename(fpath),
-                                    key=f"dl_pg_{a['id']}",
-                                    use_container_width=True
-                                )
+                            cur_idx += 1
+                        
+                        # 3. Remove (Matches View button style)
+                        if cols[cur_idx].button("🗑️ Remove", key=f"hide_ann_{a['id']}", help="Hide from view", use_container_width=True):
+                            if delete_announcement_faculty(u_email, a['id']):
+                                st.rerun()
+                else:
+                    # No attachment, just Remove button
+                    rc1, rc2 = st.columns([0.7, 0.3])
+                    if rc2.button("🗑️ Remove", key=f"hide_ann_no_{a['id']}", use_container_width=True):
+                        if delete_announcement_faculty(u_email, a['id']):
+                            st.rerun()
 
         # Inline Viewer Section
         v_key = f"view_state_{a['id']}"

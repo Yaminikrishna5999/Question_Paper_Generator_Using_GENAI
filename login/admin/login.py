@@ -32,6 +32,7 @@ def show_admin_login():
                 st.session_state.user_role = "admin"
                 st.session_state.user_data = result
                 st.session_state.faculty_name = result["name"]
+                st.session_state.admin_page = "admin_dash"
                 add_audit_log(uname, "Admin Login", "Administrator signed in successfully")
                 st.rerun()
             else:

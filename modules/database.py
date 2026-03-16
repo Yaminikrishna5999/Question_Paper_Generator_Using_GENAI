@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import hashlib
+import streamlit as st
 
 DB_PATH = os.path.join("data", "users.db")
 
@@ -142,6 +143,30 @@ def init_db():
         cursor.execute("ALTER TABLE announcements ADD COLUMN attachment TEXT")
     except sqlite3.OperationalError: pass
 
+    try:
+        cursor.execute("ALTER TABLE user_papers ADD COLUMN faculty_deleted BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE user_papers ADD COLUMN admin_deleted BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE announcements ADD COLUMN admin_deleted BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError: pass
+
+    # --- Faculty Announcement Deletions ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS faculty_announcement_deletions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT NOT NULL,
+            announcement_id INTEGER NOT NULL,
+            UNIQUE(user_email, announcement_id)
+        )
+    """)
+
     # --- Notifications Table ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS notifications (
@@ -154,6 +179,11 @@ def init_db():
         )
     """)
     
+    try:
+        cursor.execute("ALTER TABLE user_papers ADD COLUMN recovery_requested BOOLEAN DEFAULT 0")
+        cursor.execute("ALTER TABLE user_papers ADD COLUMN faculty_perm_deleted BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError: pass
+
     # --- Announcement Reads Table ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS announcement_reads (
@@ -166,6 +196,7 @@ def init_db():
     """)
     
     conn.commit()
+    st.cache_data.clear()
     conn.close()
 
 def add_user(full_name, email, department, designation, password, role="faculty", subjects=""):
@@ -178,12 +209,14 @@ def add_user(full_name, email, department, designation, password, role="faculty"
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (full_name, email, department, designation, hashed_pass, role, "Active", subjects))
         conn.commit()
+    st.cache_data.clear()
         return True, "Registration successful"
     except sqlite3.IntegrityError:
         return False, "Email already registered"
     except Exception as e:
         return False, str(e)
     finally:
+        st.cache_data.clear() # Clear all caches on new user
         conn.close()
 
 def verify_user(email, password, role=None):
@@ -196,6 +229,21 @@ def verify_user(email, password, role=None):
     conn.close()
     
     if user:
+        db_role = user[1]
+        db_email = user[4]
+        
+        # Role Enforcement
+        if role:
+            if role == "admin":
+                # Strict check for the primary admin account
+                if db_email != "admin@gmail.com" or db_role != "admin":
+                    return False, "Unauthorized: This login is restricted to the primary Administrator account."
+            elif role == "faculty":
+                if db_role != "faculty":
+                    return False, "Unauthorized: This login is restricted to Faculty accounts only."
+            elif db_role != role:
+                return False, f"Unauthorized: Role mismatch (expected {role})."
+
         return True, {
             "name": user[0], 
             "role": user[1],
@@ -224,19 +272,32 @@ def save_paper(email, paper_dict):
     
     # Retrieve the id we just inserted so we can track it in the frontend
     last_id = cursor.lastrowid
+    st.cache_data.clear() # Clear papers cache
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return last_id
 
-def get_user_papers(email):
+@st.cache_data(ttl=300)
+def get_user_papers(email, include_deleted=False):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, paper_data, status, admin_comments, is_downloaded 
-        FROM user_papers 
-        WHERE user_email = ? 
-        ORDER BY created_at DESC
-    """, (email,))
+    if include_deleted:
+        # Get only papers that ARE deleted by faculty but NOT permanently
+        cursor.execute("""
+            SELECT id, paper_data, status, admin_comments, is_downloaded, recovery_requested 
+            FROM user_papers 
+            WHERE user_email = ? AND faculty_deleted = 1 AND (faculty_perm_deleted = 0 OR faculty_perm_deleted IS NULL)
+            ORDER BY created_at DESC
+        """, (email,))
+    else:
+        # Standard view: Not deleted
+        cursor.execute("""
+            SELECT id, paper_data, status, admin_comments, is_downloaded 
+            FROM user_papers 
+            WHERE user_email = ? AND (faculty_deleted = 0 OR faculty_deleted IS NULL)
+            ORDER BY created_at DESC
+        """, (email,))
     rows = cursor.fetchall()
     conn.close()
     
@@ -245,9 +306,12 @@ def get_user_papers(email):
         try:
             p = json.loads(r[1])
             p["db_id"] = r[0]
+            p["id"] = r[0]
             p["approval_status"] = r[2]
             p["admin_comments"] = r[3]
             p["is_downloaded"] = bool(r[4])
+            if include_deleted:
+                p["recovery_requested"] = bool(r[5])
             papers.append(p)
         except:
             pass
@@ -256,9 +320,59 @@ def get_user_papers(email):
 def delete_paper(paper_id, email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM user_papers WHERE id = ? AND user_email = ?", (paper_id, email))
+    cursor.execute("UPDATE user_papers SET faculty_deleted = 1 WHERE id = ? AND user_email = ?", (paper_id, email))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
+    return True
+
+def delete_paper_admin(paper_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_papers SET admin_deleted = 1 WHERE id = ?", (paper_id,))
+    conn.commit()
+    st.cache_data.clear()
+    conn.close()
+    return True
+
+def restore_paper(paper_id):
+    """Restore a paper for the faculty member."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_papers SET faculty_deleted = 0, recovery_requested = 0 WHERE id = ?", (paper_id,))
+    conn.commit()
+    st.cache_data.clear()
+    conn.close()
+    return True
+
+def request_paper_recovery(paper_id):
+    """Mark a paper as recovery requested."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_papers SET recovery_requested = 1 WHERE id = ?", (paper_id,))
+    conn.commit()
+    st.cache_data.clear()
+    conn.close()
+    return True
+
+def get_paper_owner_email(paper_id):
+    """Return the user_email for the given paper_id."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_email FROM user_papers WHERE id = ?", (paper_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def permanently_delete_paper_faculty(paper_id, email):
+    """Faculty permanently remove a paper from their trash."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_papers SET faculty_perm_deleted = 1 WHERE id = ? AND user_email = ?", (paper_id, email))
+    conn.commit()
+    st.cache_data.clear()
+    conn.close()
+    return True
 
 def get_all_users():
     conn = sqlite3.connect(DB_PATH)
@@ -279,6 +393,7 @@ def reset_password(email, new_password):
     hashed_pass = hashlib.sha256(new_password.encode()).hexdigest()
     cursor.execute("UPDATE users SET password = ? WHERE email = ?", (hashed_pass, email))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -292,6 +407,7 @@ def delete_user(email):
     # Delete user
     cursor.execute("DELETE FROM users WHERE email = ?", (email,))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -301,6 +417,7 @@ def update_last_login(email):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("UPDATE users SET last_login = ? WHERE email = ?", (now, email))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
 
 def update_user_status(email, status):
@@ -308,6 +425,7 @@ def update_user_status(email, status):
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET status = ? WHERE email = ?", (status, email))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -320,6 +438,7 @@ def update_user_details(email, name, dept, desig, subjects):
         WHERE email = ?
     """, (name, dept, desig, subjects, email))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -343,12 +462,15 @@ def get_distinct_departments():
     conn.close()
     return sorted(depts)
 
+@st.cache_data(ttl=300)
 def get_all_papers_admin():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, user_email, paper_data, created_at, status, admin_comments, is_downloaded, admin_downloaded
         FROM user_papers 
+        WHERE (admin_deleted = 0 OR admin_deleted IS NULL)
+        AND status != 'Pending'
         ORDER BY created_at DESC
     """)
     rows = cursor.fetchall()
@@ -410,6 +532,7 @@ def update_paper_approval(paper_id, status, comments):
                    ("admin@gmail.com", "Paper Status Updated", f"Paper {paper_name} ({paper_id}) set to {status}"))
     
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -418,6 +541,7 @@ def mark_paper_downloaded(paper_id):
     cursor = conn.cursor()
     cursor.execute("UPDATE user_papers SET is_downloaded = 1 WHERE id = ?", (paper_id,))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -426,6 +550,7 @@ def mark_paper_downloaded_admin(paper_id):
     cursor = conn.cursor()
     cursor.execute("UPDATE user_papers SET admin_downloaded = 1 WHERE id = ?", (paper_id,))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -438,6 +563,7 @@ def submit_paper(paper_id, format_type):
         WHERE id = ?
     """, (format_type, paper_id))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -448,10 +574,13 @@ def add_notification(email, message, paper_id=None):
         INSERT INTO notifications (user_email, message, paper_id)
         VALUES (?, ?, ?)
     """, (email, message, paper_id))
+    st.cache_data.clear()
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
+@st.cache_data(ttl=60)
 def get_notifications(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -470,6 +599,7 @@ def mark_notification_read(notif_id):
     cursor = conn.cursor()
     cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notif_id,))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
@@ -477,10 +607,13 @@ def mark_all_notifications_read(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("UPDATE notifications SET is_read = 1 WHERE user_email = ?", (email,))
+    st.cache_data.clear()
     conn.commit()
+    st.cache_data.clear()
     conn.close()
     return True
 
+@st.cache_data(ttl=60)
 def get_unread_notification_count(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -493,13 +626,17 @@ def get_admin_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'faculty'")
+    # Active papers only (not admin_deleted and not faculty_perm_deleted)
+    # Filter: Only show submitted papers to admin (status != 'Pending')
+    filter_sql = "WHERE (admin_deleted = 0 OR admin_deleted IS NULL) AND (faculty_perm_deleted = 0 OR faculty_perm_deleted IS NULL) AND status != 'Pending'"
+    
+    cursor.execute(f"SELECT COUNT(*) FROM users WHERE role = 'faculty'")
     total_faculty = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM user_papers")
+    cursor.execute(f"SELECT COUNT(*) FROM user_papers {filter_sql}")
     total_papers = cursor.fetchone()[0]
     
-    cursor.execute("SELECT COUNT(*) FROM user_papers WHERE date(created_at) = date('now')")
+    cursor.execute(f"SELECT COUNT(*) FROM user_papers {filter_sql} AND date(created_at) = date('now')")
     today_papers = cursor.fetchone()[0]
     
     active_now = get_active_now_count()
@@ -534,7 +671,19 @@ def add_audit_log(email, action, details):
     cursor = conn.cursor()
     cursor.execute("INSERT INTO audit_logs (user_email, action, details) VALUES (?, ?, ?)", (email, action, details))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
+
+def clear_old_audit_logs(days_back):
+    """Delete logs older than X days."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM audit_logs WHERE timestamp < datetime('now', ?)", (f'-{days_back} days',))
+    deleted_count = cursor.rowcount
+    conn.commit()
+    st.cache_data.clear()
+    conn.close()
+    return deleted_count
 
 def get_audit_logs(limit=50):
     conn = sqlite3.connect(DB_PATH)
@@ -545,15 +694,30 @@ def get_audit_logs(limit=50):
     return [{"time": l[0], "user": l[1], "action": l[2], "details": l[3]} for l in logs]
 
 def delete_announcement(ann_id):
-    """Delete an announcement by ID."""
+    """Admin soft-delete an announcement."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM announcements WHERE id = ?", (ann_id,))
+        cursor.execute("UPDATE announcements SET admin_deleted = 1 WHERE id = ?", (ann_id,))
         conn.commit()
+    st.cache_data.clear()
         return True
     except Exception as e:
         print(f"Error deleting announcement: {e}")
+        return False
+    finally:
+        conn.close()
+
+def delete_announcement_faculty(email, ann_id):
+    """Faculty hide an announcement from their view."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO faculty_announcement_deletions (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
+        conn.commit()
+    st.cache_data.clear()
+        return True
+    except:
         return False
     finally:
         conn.close()
@@ -562,16 +726,21 @@ def get_announcements(user_email=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if user_email:
+        # Faculty View: Show all targeted announcements EXCEPT those deleted by the faculty
         cursor.execute("""
-            SELECT id, title, message, type, target_type, target_email, deadline, attachment, created_at 
-            FROM announcements 
-            WHERE target_type = 'all' OR target_email = ?
-            ORDER BY created_at DESC
-        """, (user_email,))
+            SELECT a.id, a.title, a.message, a.type, a.target_type, a.target_email, a.deadline, a.attachment, a.created_at 
+            FROM announcements a
+            LEFT JOIN faculty_announcement_deletions d ON a.id = d.announcement_id AND d.user_email = ?
+            WHERE (a.target_type = 'all' OR a.target_email = ?)
+            AND d.id IS NULL
+            ORDER BY a.created_at DESC
+        """, (user_email, user_email))
     else:
+        # Admin View: Show all announcements NOT deleted by admin
         cursor.execute("""
             SELECT id, title, message, type, target_type, target_email, deadline, attachment, created_at 
             FROM announcements 
+            WHERE admin_deleted = 0 OR admin_deleted IS NULL
             ORDER BY created_at DESC
         """)
     anns = cursor.fetchall()
@@ -586,12 +755,15 @@ def mark_announcement_read(email, ann_id):
     try:
         cursor.execute("INSERT OR IGNORE INTO announcement_reads (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
         conn.commit()
+    st.cache_data.clear()
         return True
     except:
         return False
     finally:
+        st.cache_data.clear()
         conn.close()
 
+@st.cache_data(ttl=60)
 def get_unread_announcement_count(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -616,6 +788,7 @@ def add_announcement(title, message, type, target_type='all', target_email=None,
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (title, message, type, target_type, target_email, deadline, attachment))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
 
 def get_system_settings():
@@ -631,6 +804,7 @@ def update_system_setting(key, value):
     cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit()
+    st.cache_data.clear()
     conn.close()
 
 def get_db_raw_data(table_name):

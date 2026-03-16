@@ -10,13 +10,15 @@ import base64
 from config import Config
 from modules.export_handler import ExportHandler
 from modules.database import (
-    get_all_users, get_all_papers_admin, get_admin_stats, 
-    delete_paper, verify_user, get_audit_logs, get_announcements,
-    add_announcement, get_system_settings, update_system_setting,
-    get_db_raw_data, get_faculty_metrics, get_distinct_departments,
-    update_user_status, update_user_details, add_user, 
+    get_all_users, get_all_papers_admin, get_admin_stats,
+    delete_paper, verify_user, submit_paper, delete_announcement, mark_all_notifications_read,
+    mark_announcement_read, get_unread_announcement_count, get_db_raw_data,
+    get_active_now_count, delete_announcement_faculty, restore_paper,
+    get_audit_logs, get_announcements, add_announcement, get_system_settings,
+    update_system_setting, get_faculty_metrics, get_distinct_departments,
     delete_announcement, add_audit_log, mark_paper_downloaded_admin,
-    get_unread_notification_count
+    get_unread_notification_count, delete_paper_admin, restore_paper, get_paper_owner_email,
+    clear_old_audit_logs
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -806,9 +808,10 @@ def _all_papers():
     """, unsafe_allow_html=True)
 
     for p in papers:
-        # DATA FIX: Correcting keys to match database schema (qCnt, mks)
-        q_cnt = p.get('qCnt', 0)
-        mks = p.get('mks', 0)
+        # DATA FIX: Use normalization to bridge schema differences
+        p_disp = _normalize_paper(p)
+        q_cnt = p_disp.get('total_questions', 0)
+        mks = p_disp.get('total_marks', 0)
         email = p.get('user_email', 'Unknown')
         status = p.get('approval_status', 'Pending')
         downloaded = p.get('is_downloaded', False)
@@ -843,8 +846,8 @@ def _all_papers():
                     <div style="min-width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg, {C.pageBg}, #fff); 
                                 display:flex; align-items:center; justify-content:center; font-size:20px; border:1px solid {C.sbBd};">📄</div>
                     <div>
-                        <div style="font-size:14px; font-weight:700; color:{C.t1}; line-height:1.2;">{p.get('exam_name', 'Untitled Paper')}</div>
-                        <div style="font-size:11px; color:{C.t3}; margin-top:2px; font-weight:500;">{p.get('course_name', 'General Course')}</div>
+                        <div style="font-size:14px; font-weight:700; color:{C.t1}; line-height:1.2;">{p_disp.get('exam_name', 'Untitled Paper')}</div>
+                        <div style="font-size:11px; color:{C.t3}; margin-top:2px; font-weight:500;">{p_disp.get('course_name', 'General Course')}</div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -886,7 +889,7 @@ def _all_papers():
                         st.session_state.reviewing_paper = p['db_id']
                     st.rerun()
                 if st.button("🗑️", key=f"del_{p['db_id']}", help="Permanently Delete Paper"):
-                    delete_paper(p['db_id'], email)
+                    delete_paper_admin(p['db_id'])
                     st.success("Paper deleted successfully.")
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -946,9 +949,8 @@ def _all_papers():
                     # Preview Logic
                     if fmt == "PDF":
                         try:
-                            pdf_path = ExportHandler.export_to_pdf(p_norm, f"Preview_{p['db_id']}.pdf")
-                            with open(pdf_path, "rb") as f:
-                                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                            pdf_bytes = ExportHandler.export_to_pdf(p_norm, to_bytes=True)
+                            base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
                             pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf" style="border-radius:8px; border:1px solid #ddd;"></iframe>'
                             st.markdown(pdf_display, unsafe_allow_html=True)
                         except Exception as e:
@@ -961,20 +963,19 @@ def _all_papers():
                     conf_col1, conf_col2 = st.columns([1, 1])
                     with conf_col1:
                         try:
-                            f_path = None
+                            f_data = None
                             mime, ext = "", ""
                             if fmt == "PDF":
-                                f_path = ExportHandler.export_to_pdf(p_norm, f"Final_{p['db_id']}.pdf")
+                                f_data = ExportHandler.export_to_pdf(p_norm, to_bytes=True)
                                 mime, ext = "application/pdf", "pdf"
                             elif fmt == "DOCX":
-                                f_path = ExportHandler.export_to_docx(p_norm, f"Final_{p['db_id']}.docx")
+                                f_data = ExportHandler.export_to_docx(p_norm, to_bytes=True)
                                 mime, ext = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"
                             
-                            if f_path and os.path.exists(f_path):
+                            if f_data:
                                 mark_paper_downloaded_admin(p['db_id'])
-                                with open(f_path, "rb") as f:
-                                    st.download_button(f"✅ Click to Download {fmt}", f, file_name=f"Paper_{p['db_id']}.{ext}", 
-                                                      mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
+                                st.download_button(f"✅ Click to Download {fmt}", f_data, file_name=f"Paper_{p['db_id']}.{ext}", 
+                                                  mime=mime, key=f"dl_final_{p['db_id']}", use_container_width=True)
                             elif fmt == "TXT":
                                 txt_data = ExportHandler._to_txt(p_norm)
                                 st.download_button(f"✅ Click to Download {fmt}", txt_data, file_name=f"Paper_{p['db_id']}.txt", 
@@ -1016,11 +1017,12 @@ def _global_qbank():
     papers = get_all_papers_admin()
     all_qs = []
     for p in papers:
-        # Some older papers might have different structures, but standard qCnt papers have 'questions' list
+        # DATA FIX: Normalize paper to get correct title/metadata
+        p_norm = _normalize_paper(p)
         qs_list = p.get('questions', [])
         for q in qs_list:
             q_copy = q.copy()
-            q_copy['paper_title'] = p.get('exam_name', 'Untitled Paper')
+            q_copy['paper_title'] = p_norm.get('exam_name', 'Untitled Paper')
             q_copy['author'] = p.get('user_email', 'Unknown')
             q_copy['author_name'] = p.get('user_email', 'Unknown').split('@')[0].title()
             all_qs.append(q_copy)
@@ -1540,6 +1542,11 @@ def _db_inspector():
 def _logs():
     from modules.database import get_audit_logs
     
+    # --- Reset Logic: Fix StreamlitAPIException ---
+    if st.session_state.get("reset_cleanup_filter"):
+        st.session_state.cleanup_filter_val = "Select Duration"
+        del st.session_state["reset_cleanup_filter"]
+    
     # Hero Title
     st.markdown(f"""
     <div style="background:white; border-radius:12px; border:1px solid {C.sbBd}; padding:18px; margin-bottom:20px; box-shadow:{C.cardSh};">
@@ -1557,6 +1564,37 @@ def _logs():
         action_filter = st.selectbox("🎯 Filter Action Type", actions)
     with c3:
         rows_limit = st.selectbox("🔢 Rows", [50, 100, 250, 500])
+
+    # Maintenance Section
+    st.markdown(f'<div style="height:1px; background:{C.sbBd}; margin:15px 0;"></div>', unsafe_allow_html=True)
+    m_col1, m_col2, m_col3 = st.columns([1.5, 1, 1])
+    with m_col1:
+        st.markdown(f'<div style="font-size:12px; font-weight:700; color:{C.t1}; margin-top:8px;">🛠️ Maintenance: Clear Outdated History</div>', unsafe_allow_html=True)
+    with m_col2:
+        clear_opts = {
+            "Select Duration": -1,
+            "All Logs": 0,
+            "Older than 1 Day": 1,
+            "Older than 1 Week": 7,
+            "Older than 1 Month": 30,
+            "Older than 3 Months": 90
+        }
+        clear_days = st.selectbox("Cleanup Filter", list(clear_opts.keys()), key="cleanup_filter_val", label_visibility="collapsed")
+    with m_col3:
+        if st.button("🗑️ Clear Old Logs", use_container_width=True, type="secondary"):
+            days = clear_opts[clear_days]
+            if days >= 0:
+                count = clear_old_audit_logs(days)
+                details = "all entries" if days == 0 else f"entries older than {clear_days}"
+                add_audit_log("admin@gmail.com", "Logs Cleared", f"Manually purged {count} log {details}")
+                st.success(f"Successfully cleared {count} old log entries!")
+                time.sleep(1)
+                # Use flag to reset value BEFORE widget instantiation in next run
+                st.session_state.reset_cleanup_filter = True
+                st.rerun()
+            else:
+                st.error("Please select a duration.")
+    st.markdown(f'<div style="height:10px;"></div>', unsafe_allow_html=True)
 
     logs_raw = get_audit_logs(limit=rows_limit)
     
@@ -1653,22 +1691,37 @@ def _admin_alerts():
             st.markdown(f'<div style="text-align:center; padding:40px; color:{C.t4};">All caught up!</div>', unsafe_allow_html=True)
         else:
             for n in unread:
-                nc1, nc2 = st.columns([0.88, 0.12])
+                is_recovery = "🆘 RECOVERY REQUEST" in n['message']
+                # Wider action area if it's a recovery request for the button text
+                nc1, nc2 = st.columns([0.72, 0.28] if is_recovery else [0.88, 0.12])
+                
                 with nc1:
                     st.markdown(f"""
-                    <div style="padding:12px 16px; background:#F8F4FD; border-radius:8px; border-left:4px solid {C.violet}; margin-bottom:10px;">
+                    <div style="padding:12px 16px; background:#F8F4FD; border-radius:8px; border-left:4px solid {C.violet if not is_recovery else C.orange}; margin-bottom:10px;">
                         <div style="font-size:13px; color:{C.t1}; font-weight:500;">{n['message']}</div>
                         <div style="font-size:10px; color:{C.t4}; margin-top:4px;">{n['time']}</div>
                     </div>
                     """, unsafe_allow_html=True)
                 with nc2:
-                    if st.button("👁️", key=f"clr_adm_pg_{n['id']}", help="View Paper & Mark as Read"):
-                        mark_notification_read(n["id"])
-                        if n.get("paper_id"):
-                            st.session_state.admin_page = "all_papers"
-                            st.session_state.reviewing_paper = n["paper_id"]
-                            st.session_state.jump_to_paper = n["paper_id"]
-                        st.rerun()
+                    if is_recovery:
+                        if st.button("♻️ Restore", key=f"res_adm_pg_{n['id']}", help="Restore this paper to the faculty member's active list"):
+                             if restore_paper(n["paper_id"]):
+                                 # Notify Faculty
+                                 faculty_email = get_paper_owner_email(n["paper_id"])
+                                 if faculty_email:
+                                     add_notification(faculty_email, f"✅ **Paper Restored**: Your recovery request was approved. The paper is now back in your active repository.", n["paper_id"])
+                                 mark_notification_read(n["id"])
+                                 st.success("Paper Restored & Faculty Notified!")
+                                 time.sleep(1)
+                                 st.rerun()
+                    else:
+                        if st.button("👁️", key=f"clr_adm_pg_{n['id']}", help="View Paper & Mark as Read"):
+                            mark_notification_read(n["id"])
+                            if n.get("paper_id"):
+                                st.session_state.admin_page = "all_papers"
+                                st.session_state.reviewing_paper = n["paper_id"]
+                                st.session_state.jump_to_paper = n["paper_id"]
+                            st.rerun()
 
     with t2:
         read_notifs = [n for n in notifs if n["is_read"]]

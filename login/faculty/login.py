@@ -19,7 +19,9 @@ def show_faculty_login():
                 st.session_state.logged_in = True
                 st.session_state.user_role = "faculty"
                 st.session_state.user_data = result
+                st.session_state.user_data = result
                 st.session_state.faculty_name = result["name"]
+                st.session_state.v5_page = "dashboard"
                 add_audit_log(uname, "Login", "Faculty signed in successfully")
                 st.rerun()
             else:

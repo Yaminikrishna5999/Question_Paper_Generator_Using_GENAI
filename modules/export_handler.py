@@ -4,6 +4,8 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 import os
 import re
+import io
+import streamlit as st
 from config import Config
 from datetime import datetime
 
@@ -56,12 +58,14 @@ class ExportHandler:
     # ═══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def export_to_pdf(paper, filename=None):
+    @st.cache_data(show_spinner=False)
+    def export_to_pdf(paper, filename=None, to_bytes=False):
         """Export question paper to a clean, professional PDF."""
 
-        if not filename:
-            filename = f"{paper['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        filepath = os.path.join(Config.OUTPUT_DIR, filename)
+        if not to_bytes:
+            if not filename:
+                filename = f"{paper['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            filepath = os.path.join(Config.OUTPUT_DIR, filename)
 
         pdf = FPDF()
         pdf.add_page()
@@ -171,6 +175,9 @@ class ExportHandler:
         pdf.set_font('Times', 'B', 12)
         pdf.cell(0, 10, '*** END OF QUESTION PAPER ***', 0, 1, 'C')
 
+        if to_bytes:
+            return pdf.output(dest='S').encode('latin-1')
+        
         pdf.output(filepath)
         return filepath
 
@@ -179,12 +186,14 @@ class ExportHandler:
     # ═══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def export_to_docx(paper, filename=None):
+    @st.cache_data(show_spinner=False)
+    def export_to_docx(paper, filename=None, to_bytes=False):
         """Export question paper to a professional DOCX."""
 
-        if not filename:
-            filename = f"{paper['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-        filepath = os.path.join(Config.OUTPUT_DIR, filename)
+        if not to_bytes:
+            if not filename:
+                filename = f"{paper['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            filepath = os.path.join(Config.OUTPUT_DIR, filename)
 
         doc = Document()
 
@@ -317,6 +326,11 @@ class ExportHandler:
         if end.runs:
             end.runs[0].bold = True
             end.runs[0].font.size = Pt(12)
+
+        if to_bytes:
+            buffer = io.BytesIO()
+            doc.save(buffer)
+            return buffer.getvalue()
 
         doc.save(filepath)
         return filepath
