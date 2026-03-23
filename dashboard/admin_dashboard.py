@@ -212,9 +212,8 @@ def _css():
         max-width:100% !important;
     }}
 
-    /* ── Page fade-up ── */
-    @keyframes fadeUp{{from{{opacity:0;transform:translateY(9px)}}to{{opacity:1;transform:translateY(0)}}}}
-    .page-content{{animation:fadeUp 0.22s ease;}}
+    /* ── Page Content ── */
+    .page-content{{}}
 
     /* ── Cards ── */
     .pg-card{{
@@ -340,8 +339,11 @@ def show_v5_admin_dashboard():
                       box-shadow:0 0 0 2px #E8F7EE;flex-shrink:0;"></div>
         </div>""", unsafe_allow_html=True)
 
-        # Fetch unread count for sidebar
-        unread_count = get_unread_notification_count("admin@gmail.com")
+        # Fetch unread count for sidebar (Throttled)
+        if "adm_sidebar_unread_ts" not in st.session_state or (time.time() - st.session_state.adm_sidebar_unread_ts > 60):
+            st.session_state.adm_sidebar_unread_val = get_unread_notification_count("admin@gmail.com")
+            st.session_state.adm_sidebar_unread_ts = time.time()
+        unread_count = st.session_state.adm_sidebar_unread_val
 
         for section, items in ADMIN_NAV:
             st.markdown(f'<span class="sb-lbl">{section}</span>', unsafe_allow_html=True)
@@ -386,6 +388,10 @@ def show_v5_admin_dashboard():
     <hr style="border:none;border-top:1px solid {C.sbBd};margin:0 0 16px 0;">
     """, unsafe_allow_html=True)
 
+    # Content Area
+    pg = st.session_state.admin_page
+    st.markdown('<div class="page-content">', unsafe_allow_html=True)
+    
     if pg == "admin_dash":         _admin_dash()
     elif pg == "admin_alerts":       _admin_alerts()
     elif pg == "fac_mgt":          _fac_mgt()
@@ -401,6 +407,8 @@ def show_v5_admin_dashboard():
     elif pg == "security":         _security()
     elif pg == "db_inspector":     _db_inspector()
     else:                          st.info(f"Page '{lbl}' is under development.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def _admin_dash():
     # Hero
@@ -1587,10 +1595,7 @@ def _logs():
             if days >= 0:
                 count = clear_old_audit_logs(days)
                 details = "all entries" if days == 0 else f"entries older than {clear_days}"
-                add_audit_log("admin@gmail.com", "Logs Cleared", f"Manually purged {count} log {details}")
                 st.success(f"Successfully cleared {count} old log entries!")
-                time.sleep(1)
-                # Use flag to reset value BEFORE widget instantiation in next run
                 st.session_state.reset_cleanup_filter = True
                 st.rerun()
             else:
@@ -1694,7 +1699,7 @@ def _admin_alerts():
             for n in unread:
                 is_recovery = "🆘 RECOVERY REQUEST" in n['message']
                 # Wider action area if it's a recovery request for the button text
-                nc1, nc2 = st.columns([0.72, 0.28] if is_recovery else [0.88, 0.12])
+                nc1, nc2 = st.columns([0.72, 0.28] if is_recovery else [0.75, 0.25])
                 
                 with nc1:
                     st.markdown(f"""
@@ -1713,16 +1718,30 @@ def _admin_alerts():
                                      add_notification(faculty_email, f"✅ **Paper Restored**: Your recovery request was approved. The paper is now back in your active repository.", n["paper_id"])
                                  mark_notification_read(n["id"])
                                  st.success("Paper Restored & Faculty Notified!")
-                                 time.sleep(1)
                                  st.rerun()
                     else:
-                        if st.button("👁️", key=f"clr_adm_pg_{n['id']}", help="View Paper & Mark as Read"):
-                            mark_notification_read(n["id"])
-                            if n.get("paper_id"):
-                                st.session_state.admin_page = "all_papers"
-                                st.session_state.reviewing_paper = n["paper_id"]
-                                st.session_state.jump_to_paper = n["paper_id"]
-                            st.rerun()
+                        btn_c1, btn_c2 = st.columns(2)
+                        with btn_c1:
+                            if st.button("👁️", key=f"clr_adm_pg_{n['id']}", help="View Paper & Mark as Read"):
+                                p_id = n.get("paper_id")
+                                if p_id:
+                                    # Check if paper is actually available in the 'All Papers' list
+                                    available_papers = get_all_papers_admin()
+                                    if not any(p.get('db_id') == p_id for p in available_papers):
+                                        st.error("The paper is no longer available.")
+                                    else:
+                                        mark_notification_read(n["id"])
+                                        st.session_state.admin_page = "all_papers"
+                                        st.session_state.reviewing_paper = p_id
+                                        st.session_state.jump_to_paper = p_id
+                                        st.rerun()
+                                else:
+                                    mark_notification_read(n["id"])
+                                    st.rerun()
+                        with btn_c2:
+                            if st.button("🗑️", key=f"del_adm_pg_{n['id']}", help="Dismiss Alert"):
+                                mark_notification_read(n["id"])
+                                st.rerun()
 
     with t2:
         read_notifs = [n for n in notifs if n["is_read"]]

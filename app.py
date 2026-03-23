@@ -20,7 +20,7 @@ init_db()
 # ═══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="AI Question Paper Generator",
-    page_icon="✦",
+    page_icon="*",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -293,7 +293,7 @@ if st.session_state.logged_in and st.session_state.user_role == "admin":
 # ===============================================================================
 st.markdown("""
 <div class="hero">
-    <div class="hero-eyebrow">✦ Powered by Gemini AI</div>
+    <div class="hero-eyebrow">* Powered by Gemini AI</div>
     <h1>AI Question Paper Generator</h1>
     <div class="hero-divider"></div>
     <p>Craft professional examination papers with intelligent AI generation</p>
@@ -372,7 +372,7 @@ if uploaded_pdf is not None:
         pdf_bytes = uploaded_pdf.read()
         pdf_topics = extract_topics_from_pdf(pdf_bytes)
         pdf_context = summarize_pdf_text_for_prompt(pdf_bytes, max_chars=4000)
-        st.sidebar.success(f"✔ PDF loaded: {len(pdf_topics)} topics detected")
+        st.sidebar.success(f"Checked PDF loaded: {len(pdf_topics)} topics detected")
         if pdf_topics:
             with st.sidebar.expander("📖 Detected Topics", expanded=False):
                 for i, t in enumerate(pdf_topics[:20], 1):
@@ -449,7 +449,7 @@ st.sidebar.markdown('<div class="sb-label">📄 Output Settings</div>', unsafe_a
 num_sets = st.sidebar.number_input("Paper Sets", min_value=1, max_value=5, value=1)
 
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
-generate_btn = st.sidebar.button("✦ Generate Question Papers", type="primary", use_container_width=True)
+generate_btn = st.sidebar.button("* Generate Question Papers", type="primary", use_container_width=True)
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -514,7 +514,7 @@ with tab1:
 
                 total_q = sum(p['total_questions'] for p in papers)
                 if total_q > 0:
-                    st.success(f"✦ Successfully generated {total_q} question(s) across {num_sets} paper set(s).")
+                    st.success(f"* Successfully generated {total_q} question(s) across {num_sets} paper set(s).")
                 else:
                     st.error("No questions generated. Check your API key and internet connection.")
 
@@ -641,7 +641,7 @@ with tab1:
     else:
         st.markdown("""
         <div class="empty-state">
-            <span class="empty-state-icon">✦</span>
+            <span class="empty-state-icon">*</span>
             <h3>Ready to Create</h3>
             <p>Configure your examination parameters in the sidebar, then generate your papers.</p>
             <div class="empty-steps">

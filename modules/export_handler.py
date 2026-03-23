@@ -340,6 +340,7 @@ class ExportHandler:
     # ═══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
+    @st.cache_data(show_spinner=False)
     def _to_txt(paper):
         """User's refined text formatter with absolute safety."""
         cfg = paper.get("config", {})

@@ -288,7 +288,7 @@ def get_user_papers(email, include_deleted=False):
             SELECT id, paper_data, status, admin_comments, is_downloaded, recovery_requested 
             FROM user_papers 
             WHERE user_email = ? AND faculty_deleted = 1 AND (faculty_perm_deleted = 0 OR faculty_perm_deleted IS NULL)
-            ORDER BY created_at DESC
+            ORDER BY created_at ASC
         """, (email,))
     else:
         # Standard view: Not deleted
@@ -296,7 +296,7 @@ def get_user_papers(email, include_deleted=False):
             SELECT id, paper_data, status, admin_comments, is_downloaded 
             FROM user_papers 
             WHERE user_email = ? AND (faculty_deleted = 0 OR faculty_deleted IS NULL)
-            ORDER BY created_at DESC
+            ORDER BY created_at ASC
         """, (email,))
     rows = cursor.fetchall()
     conn.close()
@@ -462,7 +462,7 @@ def get_distinct_departments():
     conn.close()
     return sorted(depts)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
 def get_all_papers_admin():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -470,7 +470,7 @@ def get_all_papers_admin():
         SELECT id, user_email, paper_data, created_at, status, admin_comments, is_downloaded, admin_downloaded
         FROM user_papers 
         WHERE (admin_deleted = 0 OR admin_deleted IS NULL)
-        AND status != 'Pending'
+        AND status IN ('Submitted', 'Approved', 'Changes Requested')
         ORDER BY created_at DESC
     """)
     rows = cursor.fetchall()
@@ -599,7 +599,6 @@ def mark_notification_read(notif_id):
     cursor = conn.cursor()
     cursor.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notif_id,))
     conn.commit()
-    st.cache_data.clear()
     conn.close()
     return True
 
@@ -607,13 +606,11 @@ def mark_all_notifications_read(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("UPDATE notifications SET is_read = 1 WHERE user_email = ?", (email,))
-    st.cache_data.clear()
     conn.commit()
-    st.cache_data.clear()
     conn.close()
     return True
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def get_unread_notification_count(email):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -622,13 +619,14 @@ def get_unread_notification_count(email):
     conn.close()
     return count
 
+@st.cache_data(ttl=60)
 def get_admin_stats():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Active papers only (not admin_deleted and not faculty_perm_deleted)
-    # Filter: Only show submitted papers to admin (status != 'Pending')
-    filter_sql = "WHERE (admin_deleted = 0 OR admin_deleted IS NULL) AND (faculty_perm_deleted = 0 OR faculty_perm_deleted IS NULL) AND status != 'Pending'"
+    # Filter: Only show submitted papers to admin (Submitted, Approved, or Changes Requested)
+    filter_sql = "WHERE (admin_deleted = 0 OR admin_deleted IS NULL) AND (faculty_perm_deleted = 0 OR faculty_perm_deleted IS NULL) AND status IN ('Submitted', 'Approved', 'Changes Requested')"
     
     cursor.execute(f"SELECT COUNT(*) FROM users WHERE role = 'faculty'")
     total_faculty = cursor.fetchone()[0]
@@ -649,6 +647,7 @@ def get_admin_stats():
         "active_now": active_now
     }
 
+@st.cache_data(ttl=60)
 def get_active_now_count(minutes=15):
     """Calculate unique users active within the last X minutes based on audit logs."""
     conn = sqlite3.connect(DB_PATH)
@@ -667,11 +666,11 @@ def get_active_now_count(minutes=15):
     return count if count > 0 else 1 # Minimum 1 (the current user)
 
 def add_audit_log(email, action, details):
+    """Log an action without clearing the high-level data cache to maintain performance."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO audit_logs (user_email, action, details) VALUES (?, ?, ?)", (email, action, details))
     conn.commit()
-    st.cache_data.clear()
     conn.close()
 
 def clear_old_audit_logs(days_back):
@@ -715,13 +714,13 @@ def delete_announcement_faculty(email, ann_id):
     try:
         cursor.execute("INSERT OR IGNORE INTO faculty_announcement_deletions (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
         conn.commit()
-        st.cache_data.clear()
         return True
     except:
         return False
     finally:
         conn.close()
 
+@st.cache_data(ttl=60)
 def get_announcements(user_email=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -755,7 +754,6 @@ def mark_announcement_read(email, ann_id):
     try:
         cursor.execute("INSERT OR IGNORE INTO announcement_reads (user_email, announcement_id) VALUES (?, ?)", (email, ann_id))
         conn.commit()
-        st.cache_data.clear()
         return True
     except:
         return False
@@ -791,6 +789,7 @@ def add_announcement(title, message, type, target_type='all', target_email=None,
     st.cache_data.clear()
     conn.close()
 
+@st.cache_data(ttl=300)
 def get_system_settings():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
