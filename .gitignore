@@ -5,4 +5,6 @@ __pycache__/
 .streamlit/
 data/*.db
 data/generated_papers/
+data/attachments/
+data/outputs/
 

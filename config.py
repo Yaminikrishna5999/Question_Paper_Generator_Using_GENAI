@@ -39,7 +39,6 @@ class Config:
     
     # File Paths
     OUTPUT_DIR = 'data/generated_papers'
-    QUESTION_BANK_FILE = 'data/question_bank.json'
     
     # Selection Options
     DEPARTMENTS = ["CSE", "ECE", "IT", "Mechanical", "Civil", "Mathematics", "Physics"]
