@@ -103,8 +103,7 @@ ADMIN_NAV = [
     ("ACADEMIC CONTROL",[("📄", "All Papers", "all_papers"),
                          ("🗂️", "Global Question Bank", "global_qbank")]),
     ("COMMUNICATION",   [("📢", "Announcements Manager", "ann_mgt")]),
-    ("SYSTEM",          [("⚙️", "System Settings", "sys_settings"),
-                         ("💾", "Database Inspector", "db_inspector")]),
+    ("SYSTEM",          [("💾", "Database Inspector", "db_inspector")]),
     ("OTHER",           [("📥", "Download Center", "adm_downloads"),
                          ("ℹ️", "About", "adm_about")]),
 ]
